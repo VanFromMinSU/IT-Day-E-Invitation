@@ -25,6 +25,7 @@
       --space-3: clamp(1.2rem, 2vw, 1.7rem);
       --space-4: clamp(1.8rem, 3.2vw, 2.6rem);
       --space-5: clamp(2.4rem, 4.5vw, 4rem);
+      --logo-balance-gap: clamp(0.44rem, 1.25vw, 0.9rem);
       --hero-title: clamp(2.2rem, 7.4vw, 6rem);
       --h2-size: clamp(1.4rem, 3.2vw, 2.5rem);
       --body-size: clamp(1rem, 1.25vw, 1.08rem);
@@ -127,6 +128,43 @@
       text-decoration: none;
     }
 
+    .header-logos-bar {
+      width: min(100% - 2rem, var(--maxw));
+      margin: var(--logo-balance-gap) auto;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      align-items: center;
+      gap: clamp(0.34rem, 1vw, 0.9rem);
+    }
+
+    .header-logos-item {
+      display: flex;
+      align-items: center;
+    }
+
+    .header-logos-item--left {
+      justify-content: flex-end;
+    }
+
+    .header-logos-item--center {
+      justify-content: center;
+    }
+
+    .header-logos-item--right {
+      justify-content: flex-start;
+    }
+
+    .institution-logo {
+      display: block;
+      height: auto;
+      object-fit: contain;
+    }
+
+    .institution-logo--bar {
+      width: clamp(68px, 7.5vw, 102px);
+    }
+
     nav ul {
       list-style: none;
       display: flex;
@@ -165,10 +203,11 @@
     }
 
     .hero {
+      margin-top: var(--logo-balance-gap);
       min-height: clamp(78vh, 90vh, 96vh);
       display: grid;
-      align-items: center;
-      padding-top: clamp(2rem, 8vh, 5rem);
+      align-items: start;
+      padding-top: 0;
       position: relative;
     }
 
@@ -933,6 +972,10 @@
         grid-column: span 12;
       }
 
+      .institution-logo--bar {
+        width: clamp(60px, 10.5vw, 88px);
+      }
+
       .cards-grid,
       .guests-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -949,8 +992,19 @@
 
     @media (max-width: 620px) {
       .nav-wrap {
+        gap: 0.55rem;
         padding-top: 0.7rem;
         padding-bottom: 0.7rem;
+      }
+
+      .header-logos-bar {
+        margin-top: var(--logo-balance-gap);
+        margin-bottom: var(--logo-balance-gap);
+        gap: clamp(0.28rem, 1.8vw, 0.55rem);
+      }
+
+      .institution-logo--bar {
+        width: clamp(50px, 15.5vw, 70px);
       }
 
       nav ul {
