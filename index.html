@@ -114,8 +114,54 @@
       <div class="about-grid">
         <article class="glass-panel about-main">
           <p>
-            This year introduces an AI-inspired identity system where participating teams can be grouped into futuristic "families" such as Neural Nexus, Quantum Circuit, and Synapse Collective, reinforcing innovation, teamwork, and creative problem-solving throughout the celebration.
+            This year introduces an AI-inspired identity system where participating teams are grouped into distinct families - Claude, Grok, Gemini, and Dola - highlighting innovation, teamwork, and creative problem-solving throughout the celebration.
           </p>
+          <div class="family-logo-list" aria-label="Family identity logos">
+            <article class="family-logo-item">
+              <img
+                id="claude-logo"
+                class="family-logo-image"
+                src="logo/claude-logo.png"
+                alt="Family 1 Claude logo"
+                loading="lazy"
+                decoding="async"
+              />
+              <p class="family-logo-label">Family 1 - Claude</p>
+            </article>
+            <article class="family-logo-item">
+              <img
+                id="grok-logo"
+                class="family-logo-image"
+                src="logo/grok-logo.png"
+                alt="Family 2 Grok logo"
+                loading="lazy"
+                decoding="async"
+              />
+              <p class="family-logo-label">Family 2 - Grok</p>
+            </article>
+            <article class="family-logo-item">
+              <img
+                id="gemini-logo"
+                class="family-logo-image"
+                src="logo/gemini-logo.png"
+                alt="Family 3 Gemini logo"
+                loading="lazy"
+                decoding="async"
+              />
+              <p class="family-logo-label">Family 3 - Gemini</p>
+            </article>
+            <article class="family-logo-item">
+              <img
+                id="dola-logo"
+                class="family-logo-image"
+                src="logo/dola-logo.png"
+                alt="Family 4 Dola logo"
+                loading="lazy"
+                decoding="async"
+              />
+              <p class="family-logo-label">Family 4 - Dola</p>
+            </article>
+          </div>
         </article>
       </div>
     </section>
@@ -137,7 +183,7 @@
           <p>Dive into IT Quiz Bee, Fast Typing, and interactive booth activities, then take on programming challenges in Java, Python, SQL, and C#.</p>
         </article>
 
-        <article class="highlight-card interactive-event" data-teaser-title="Esports Showdown" data-teaser-text="From Mobile Legends elimination rounds to Call of Duty Mobile battles, this is where strategy and skill collide." tabindex="0" role="button" aria-label="Open teaser for Esports Showdown">
+        <article class="highlight-card interactive-event" data-event-id="codm-tournament" data-teaser-title="Esports Showdown" data-teaser-text="From Mobile Legends elimination rounds to Call of Duty Mobile battles, this is where strategy and skill collide." tabindex="0" role="button" aria-label="Open teaser for Esports Showdown">
           <div class="card-icon" aria-hidden="true">03</div>
           <h3>Esports Showdown <span class="event-badge">Crowd Favorite</span></h3>
           <p>Feel the intensity of Mobile Legends from elimination rounds to tournament play, plus an action-packed Call of Duty Mobile tournament.</p>
@@ -149,7 +195,7 @@
           <p>Cheer for Men's Half Court Basketball and Women's Beach Volleyball, then join crowd-favorite activities like Parlor Games and Scavenger Hunt.</p>
         </article>
 
-        <article class="highlight-card interactive-event" data-teaser-title="Mind-Challenging Games" data-teaser-text="Precision and focus take center stage in the Chess Tournament, Rubik's Cube Challenge, and Sudoku Challenge." tabindex="0" role="button" aria-label="Open teaser for Mind-Challenging Games">
+        <article class="highlight-card interactive-event" data-event-id="rubiks-cube-competition" data-teaser-title="Mind-Challenging Games" data-teaser-text="Precision and focus take center stage in the Chess Tournament, Rubik's Cube Challenge, and Sudoku Challenge." tabindex="0" role="button" aria-label="Open teaser for Mind-Challenging Games">
           <div class="card-icon" aria-hidden="true">05</div>
           <h3>Mind-Challenging Games</h3>
           <p>Test strategy and speed in the Chess Tournament, Rubik's Cube Challenge, and Sudoku Challenge.</p>
@@ -228,7 +274,7 @@
         <article class="timeline-day" role="listitem">
           <h3>April 23</h3>
           <ul class="timeline-list">
-            <li class="timeline-item interactive-event" data-teaser-title="Mind Games Morning" data-teaser-text="Challenge your strategy and logic through chess, cube-solving, and sudoku matches." tabindex="0" role="button" aria-label="Open teaser for Mind Games Morning">
+            <li class="timeline-item interactive-event" data-event-id="sudoku-game-easy-level" data-teaser-title="Sudoku Game (Easy Level)" data-teaser-text="Put your logic and precision to the test in the easy-level Sudoku challenge." tabindex="0" role="button" aria-label="Open details for Sudoku Game (Easy Level)">
               <span class="timeline-time">6:00 AM - 10:00 AM</span>
               <div class="timeline-topic">
                 <ul class="timeline-sublist">
@@ -238,7 +284,7 @@
                 </ul>
               </div>
             </li>
-            <li class="timeline-item interactive-event" data-teaser-title="Esports Tournaments" data-teaser-text="Compete and cheer during Mobile Legends and Call of Duty Mobile tournament rounds." tabindex="0" role="button" aria-label="Open teaser for Esports Tournaments">
+            <li class="timeline-item interactive-event" data-event-id="codm-tournament" data-teaser-title="Esports Tournaments" data-teaser-text="Compete and cheer during Mobile Legends and Call of Duty Mobile tournament rounds." tabindex="0" role="button" aria-label="Open teaser for Esports Tournaments">
               <span class="timeline-time">10:00 AM - 12:00 PM</span>
               <div class="timeline-topic">
                 <span class="timeline-badge">Crowd Favorite</span>
@@ -317,77 +363,47 @@
     <section id="register" class="cta-section reveal" aria-labelledby="cta-title">
       <div class="glass-panel">
         <h2 class="section-title" id="cta-title">Be Part of IT Day 2026</h2>
-        <p>Don't miss out. Secure your slot now and join a day full of fun, learning, and unforgettable campus moments.</p>
-        <a class="btn btn-primary" href="#" id="register-button" aria-label="Register for IT Day 2026">Register Now</a>
-        <p class="edit-hint">Fast action tip: Registration is open now. Click Register Now to reserve your spot.</p>
+        <p>Don't miss out. Let us know if you're interested or excited to join a day full of fun, learning, and unforgettable campus moments.</p>
+        <div class="registration-actions response-actions" aria-label="Event response actions">
+          <button type="button" class="btn btn-primary" id="interested-button">Interested</button>
+          <button type="button" class="btn btn-secondary" id="excited-button">Excited</button>
+        </div>
+        <p class="response-summary" id="response-summary" aria-live="polite">Interested: 0 | Excited: 0 | Total: 0</p>
+        <div class="response-admin-actions" id="response-admin-actions" hidden>
+          <button type="button" class="btn btn-secondary admin-reset-button" id="reset-counts-button" hidden>Reset Counts</button>
+        </div>
+        <p class="edit-hint">Tap Interested or Excited to track event responses.</p>
       </div>
     </section>
-
-    <div class="registration-modal" id="registration-modal" aria-hidden="true">
-      <div class="registration-modal__backdrop" data-modal-close="true"></div>
-      <div class="registration-modal__panel glass-panel" role="dialog" aria-modal="true" aria-labelledby="registration-title">
-        <div class="registration-modal__header">
-          <h3 id="registration-title">IT Day 2026 Registration</h3>
-          <button type="button" class="registration-close" data-modal-close="true" aria-label="Close registration form">Close</button>
-        </div>
-
-        <form id="registration-form" class="registration-form" novalidate>
-          <div class="registration-field">
-            <label for="full-name">Full Name</label>
-            <input id="full-name" name="fullName" type="text" autocomplete="name" required />
-            <small class="field-error" id="full-name-error" aria-live="polite"></small>
-          </div>
-
-          <div class="registration-field">
-            <label for="email">Email Address</label>
-            <input id="email" name="email" type="email" autocomplete="email" required />
-            <small class="field-error" id="email-error" aria-live="polite"></small>
-          </div>
-
-          <div class="registration-field">
-            <label for="course">Course</label>
-            <select id="course" name="course" required>
-              <option value="">Select course</option>
-              <option value="BSIT">BSIT</option>
-              <option value="BSCS">BSCS</option>
-              <option value="ACT">ACT</option>
-              <option value="Other">Other</option>
-            </select>
-            <small class="field-error" id="course-error" aria-live="polite"></small>
-          </div>
-
-          <div class="registration-field">
-            <label for="year-level">Year Level</label>
-            <select id="year-level" name="yearLevel" required>
-              <option value="">Select year level</option>
-              <option value="1st Year">1st Year</option>
-              <option value="2nd Year">2nd Year</option>
-              <option value="3rd Year">3rd Year</option>
-              <option value="4th Year">4th Year</option>
-            </select>
-            <small class="field-error" id="year-level-error" aria-live="polite"></small>
-          </div>
-
-          <p class="registration-feedback" id="registration-feedback" aria-live="polite"></p>
-
-          <div class="registration-actions">
-            <button type="submit" class="btn btn-primary">Submit Registration</button>
-            <button type="button" class="btn btn-secondary" data-modal-close="true">Cancel</button>
-          </div>
-        </form>
-      </div>
-    </div>
 
     <div class="teaser-modal" id="teaser-modal" aria-hidden="true">
       <div class="teaser-modal__backdrop" data-teaser-close="true"></div>
       <div class="teaser-modal__panel glass-panel" role="dialog" aria-modal="true" aria-labelledby="teaser-title">
         <div class="registration-modal__header">
-          <h3 id="teaser-title">Event Sneak Peek</h3>
+          <h3 id="teaser-title">Select Event</h3>
           <button type="button" class="registration-close" data-teaser-close="true" aria-label="Close teaser">Close</button>
         </div>
-        <p class="section-intro" id="teaser-text">Discover what makes this activity worth attending.</p>
+
+        <section class="event-step event-selection-step is-active" id="event-selection-step" aria-labelledby="event-selection-title">
+          <h4 id="event-selection-title">Choose a Sub-Event</h4>
+          <p class="event-selection-context" id="event-selection-context">Select an event from this category to view complete details and registration.</p>
+          <div class="event-selection-list" id="event-selection-list" role="list"></div>
+        </section>
+
+        <section class="event-step event-detail-step" id="event-detail-step" aria-labelledby="teaser-title">
+          <p class="event-venue-row"><strong>Venue:</strong> <span id="teaser-venue">To be updated</span></p>
+          <section class="event-detail-block" aria-labelledby="event-mechanics-title">
+            <h4 id="event-mechanics-title">Mechanics and Guidelines</h4>
+            <div class="event-mechanics" id="teaser-mechanics">To be updated.</div>
+          </section>
+          <section class="event-detail-block" aria-labelledby="event-registration-title">
+            <h4 id="event-registration-title">Event Registration</h4>
+            <div class="event-registration-wrap" id="teaser-registration"></div>
+          </section>
+        </section>
+
         <div class="registration-actions">
-          <button type="button" class="btn btn-primary" id="teaser-register-button">Register Now</button>
+          <button type="button" class="btn btn-secondary" id="teaser-change-event-button" hidden>Choose Another Event</button>
           <button type="button" class="btn btn-secondary" data-teaser-close="true">Back to Program</button>
         </div>
       </div>
