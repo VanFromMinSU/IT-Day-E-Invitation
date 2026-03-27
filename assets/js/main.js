@@ -4,8 +4,6 @@
       const interestedButton = document.getElementById("interested-button");
       const excitedButton = document.getElementById("excited-button");
       const responseSummary = document.getElementById("response-summary");
-      const responseAdminActions = document.getElementById("response-admin-actions");
-      const resetCountsButton = document.getElementById("reset-counts-button");
       const teaserModal = document.getElementById("teaser-modal");
       const teaserTitle = document.getElementById("teaser-title");
       const teaserSelectionStep = document.getElementById("event-selection-step");
@@ -20,10 +18,12 @@
       const countdownChip = document.getElementById("countdown-chip");
       const responseStorageKey = "itDayResponseCounts";
       const eventRegistrationStorageKey = "itDayEventRegistrations";
-      const adminSessionKey = "itDayAdminAuthorized";
       const adminTokenParam = "adminToken";
       const adminTokenHash = "fb7cd66cd9802076b019b15ddf51cfbfd6ae603642a4153a5b78ae8696515bd4";
+      const adminResetAuthorizationKey = {};
       let isAdminAuthorized = false;
+      let responseAdminActions = null;
+      let resetCountsButton = null;
       let toastTimer;
 
       const familyOptions = ["Family 1 - Claude", "Family 2 - Grok", "Family 3 - Gemini", "Family 4 - Dola"];
@@ -231,14 +231,36 @@
         responseSummary.textContent = "Interested: " + counts.interested + " | Excited: " + counts.excited + " | Total: " + total;
       }
 
-      function setAdminResetVisibility(isVisible) {
-        if (responseAdminActions) {
-          responseAdminActions.hidden = !isVisible;
+      function removeAdminResetControls() {
+        if (resetCountsButton) {
+          resetCountsButton.removeEventListener("click", onAdminResetClick);
+          resetCountsButton = null;
         }
 
-        if (resetCountsButton) {
-          resetCountsButton.hidden = !isVisible;
+        if (responseAdminActions) {
+          responseAdminActions.remove();
+          responseAdminActions = null;
         }
+      }
+
+      function ensureAdminResetControls() {
+        if (!responseSummary || responseAdminActions || !isAdminAuthorized) {
+          return;
+        }
+
+        responseAdminActions = document.createElement("div");
+        responseAdminActions.className = "response-admin-actions";
+        responseAdminActions.id = "response-admin-actions";
+
+        resetCountsButton = document.createElement("button");
+        resetCountsButton.type = "button";
+        resetCountsButton.className = "btn btn-secondary admin-reset-button";
+        resetCountsButton.id = "reset-counts-button";
+        resetCountsButton.textContent = "Reset Counts";
+        resetCountsButton.addEventListener("click", onAdminResetClick);
+
+        responseAdminActions.appendChild(resetCountsButton);
+        responseSummary.insertAdjacentElement("afterend", responseAdminActions);
       }
 
       async function hashText(value) {
@@ -254,35 +276,27 @@
       }
 
       async function initializeAdminAccess() {
-        if (!resetCountsButton) {
-          return;
-        }
-
-        if (sessionStorage.getItem(adminSessionKey) === "true") {
-          isAdminAuthorized = true;
-          setAdminResetVisibility(true);
-          return;
-        }
+        isAdminAuthorized = false;
+        removeAdminResetControls();
 
         const params = new URLSearchParams(window.location.search);
         const adminToken = params.get(adminTokenParam);
 
-        if (!adminToken) {
-          setAdminResetVisibility(false);
-          return;
+        if (adminToken) {
+          const tokenHash = await hashText(adminToken.trim());
+          isAdminAuthorized = tokenHash === adminTokenHash;
         }
 
-        const tokenHash = await hashText(adminToken.trim());
-        isAdminAuthorized = tokenHash === adminTokenHash;
+        if (adminToken) {
+          params.delete(adminTokenParam);
+          const nextQuery = params.toString();
+          const nextUrl = window.location.pathname + (nextQuery ? "?" + nextQuery : "") + window.location.hash;
+          window.history.replaceState({}, document.title, nextUrl);
+        }
+
         if (isAdminAuthorized) {
-          sessionStorage.setItem(adminSessionKey, "true");
+          ensureAdminResetControls();
         }
-
-        params.delete(adminTokenParam);
-        const nextQuery = params.toString();
-        const nextUrl = window.location.pathname + (nextQuery ? "?" + nextQuery : "") + window.location.hash;
-        window.history.replaceState({}, document.title, nextUrl);
-        setAdminResetVisibility(isAdminAuthorized);
       }
 
       function trackResponse(responseType) {
@@ -302,8 +316,8 @@
         showToast("Thanks for your response. Total reactions: " + total + ".");
       }
 
-      function resetResponseCounts() {
-        if (!isAdminAuthorized) {
+      function resetResponseCounts(authorizationKey) {
+        if (!isAdminAuthorized || authorizationKey !== adminResetAuthorizationKey) {
           showToast("Admin access required.");
           return;
         }
@@ -312,6 +326,20 @@
         saveResponseCounts(zeroCounts);
         renderResponseCounts(zeroCounts);
         showToast("Response counts reset.");
+      }
+
+      function onAdminResetClick() {
+        if (!isAdminAuthorized) {
+          showToast("Admin access required.");
+          return;
+        }
+
+        const approved = window.confirm("Reset all Interested and Excited counts?");
+        if (!approved) {
+          return;
+        }
+
+        resetResponseCounts(adminResetAuthorizationKey);
       }
 
       function humanizeEventId(eventId) {
@@ -682,7 +710,6 @@
       }
 
       renderResponseCounts(getResponseCounts());
-      setAdminResetVisibility(false);
       initializeAdminAccess();
 
       if (interestedButton) {
@@ -694,22 +721,6 @@
       if (excitedButton) {
         excitedButton.addEventListener("click", () => {
           trackResponse("excited");
-        });
-      }
-
-      if (resetCountsButton) {
-        resetCountsButton.addEventListener("click", () => {
-          if (!isAdminAuthorized) {
-            showToast("Admin access required.");
-            return;
-          }
-
-          const approved = window.confirm("Reset all Interested and Excited counts?");
-          if (!approved) {
-            return;
-          }
-
-          resetResponseCounts();
         });
       }
 
