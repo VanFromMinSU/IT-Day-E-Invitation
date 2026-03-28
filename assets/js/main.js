@@ -37,8 +37,12 @@
       const appConfig = window.APP_CONFIG && typeof window.APP_CONFIG === "object" ? window.APP_CONFIG : {};
       const supabaseUrl = typeof appConfig.supabaseUrl === "string" ? appConfig.supabaseUrl.trim() : "";
       const supabaseAnonKey = typeof appConfig.supabaseAnonKey === "string" ? appConfig.supabaseAnonKey.trim() : "";
-      const configuredResponseAdminTokenHash = typeof appConfig.responseAdminTokenHash === "string" ? appConfig.responseAdminTokenHash.trim().toLowerCase() : "";
-      const responseAdminTokenHash = configuredResponseAdminTokenHash || "fb7cd66cd9802076b019b15ddf51cfbfd6ae603642a4153a5b78ae8696515bd4";
+      const defaultResponseAdminTokenHash = "fb7cd66cd9802076b019b15ddf51cfbfd6ae603642a4153a5b78ae8696515bd4";
+      const configuredResponseAdminTokenHash =
+        typeof appConfig.responseAdminTokenHash === "string" && /^[a-f0-9]{64}$/i.test(appConfig.responseAdminTokenHash.trim())
+          ? appConfig.responseAdminTokenHash.trim().toLowerCase()
+          : "";
+      const responseAdminTokenHash = configuredResponseAdminTokenHash || defaultResponseAdminTokenHash;
       const supabaseModule = window.supabase && typeof window.supabase.createClient === "function" ? window.supabase : null;
       const supabaseClient = supabaseModule && supabaseUrl && supabaseAnonKey
         ? supabaseModule.createClient(supabaseUrl, supabaseAnonKey, {
@@ -661,6 +665,15 @@
         }
       }
 
+      function getActiveAdminTokenHash() {
+        const inMemoryTokenHash = normalizeAdminTokenHash(adminTokenHash);
+        if (inMemoryTokenHash) {
+          return inMemoryTokenHash;
+        }
+
+        return getStoredAdminTokenHash();
+      }
+
       async function fetchFromHttpApi(url, options) {
         const requestOptions = options && typeof options === "object" ? options : {};
         const method = String(requestOptions.method || "GET").toUpperCase();
@@ -997,7 +1010,13 @@
       }
 
       function ensureAdminResetControls() {
-        if (!responseSummary || responseAdminActions || (!isAdminAuthorized && !isAdminModeRequested && !isAdminTokenAuthorized)) {
+        const hasStoredTokenAdminAccess = Boolean(getActiveAdminTokenHash());
+
+        if (
+          !responseSummary ||
+          responseAdminActions ||
+          (!isAdminAuthorized && !isAdminModeRequested && !isAdminTokenAuthorized && !hasStoredTokenAdminAccess)
+        ) {
           return;
         }
 
@@ -1124,7 +1143,8 @@
         if (supabaseClient && !authStateSubscription) {
           const authListener = supabaseClient.auth.onAuthStateChange(() => {
             refreshAdminAuthorization().then(() => {
-              if (isAdminAuthorized || isAdminModeRequested || isAdminTokenAuthorized) {
+              const hasStoredTokenAdminAccess = Boolean(getActiveAdminTokenHash());
+              if (isAdminAuthorized || isAdminModeRequested || isAdminTokenAuthorized || hasStoredTokenAdminAccess) {
                 ensureAdminResetControls();
               } else {
                 removeAdminResetControls();
@@ -1135,7 +1155,7 @@
           authStateSubscription = authListener && authListener.data ? authListener.data.subscription : null;
         }
 
-        if (isAdminAuthorized || isAdminModeRequested || isAdminTokenAuthorized) {
+        if (isAdminAuthorized || isAdminModeRequested || isAdminTokenAuthorized || Boolean(getActiveAdminTokenHash())) {
           ensureAdminResetControls();
         }
       }
@@ -1263,7 +1283,8 @@
       }
 
       async function resetResponseCounts(authorizationKey) {
-        const hasTokenAdminAccess = isAdminTokenAuthorized && Boolean(adminTokenHash);
+        const activeAdminTokenHash = getActiveAdminTokenHash();
+        const hasTokenAdminAccess = Boolean(activeAdminTokenHash);
 
         if ((!isAdminAuthorized && !hasTokenAdminAccess) || authorizationKey !== adminResetAuthorizationKey) {
           showToast("Admin access required.");
@@ -1272,7 +1293,7 @@
 
         const requestHeaders = {};
         if (hasTokenAdminAccess) {
-          requestHeaders[adminResetTokenHeader] = adminTokenHash;
+          requestHeaders[adminResetTokenHeader] = activeAdminTokenHash;
         }
 
         const result = await fetchJson(responseApiBaseUrl + "/reset", {
@@ -1298,7 +1319,7 @@
       }
 
       async function onAdminResetClick() {
-        const hasTokenAdminAccess = isAdminTokenAuthorized && Boolean(adminTokenHash);
+        const hasTokenAdminAccess = Boolean(getActiveAdminTokenHash());
 
         if (!isAdminAuthorized && !hasTokenAdminAccess) {
           const signedIn = await promptAdminSignIn();
