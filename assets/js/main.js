@@ -20,6 +20,11 @@
       const responseChoiceStorageKey = "itDayResponseChoice";
       const responseApiBaseUrl = "/api/reactions";
       const responsePollingIntervalMs = 15000;
+      const responseReconnectBaseDelayMs = 1800;
+      const responseReconnectMaxDelayMs = 30000;
+      const responseRpcTimeoutMs = 12000;
+      const responseHttpTimeoutMs = 12000;
+      const responseUnavailableMessage = "Live response counter is unavailable. Retrying in background.";
       const eventRegistrationApiBaseUrl = "/api/event-registrations";
       const eventRegistrationPollingIntervalMs = 12000;
       const adminModeParam = "admin";
@@ -52,6 +57,11 @@
       let hasSubmittedResponse = false;
       let submittedResponseType = "";
       let isResponseSubmissionPending = false;
+      let isResponseBackendReady = false;
+      let responseReconnectTimerId = null;
+      let responseReconnectAttempts = 0;
+      let isResponseReconnectInProgress = false;
+      let responseStatusNotice = null;
       let hasShownBackendUnavailableNotice = false;
       let toastTimer;
 
@@ -197,6 +207,92 @@
         }, 2600);
       }
 
+      function ensureResponseStatusNotice() {
+        if (responseStatusNotice || !responseSummary) {
+          return responseStatusNotice;
+        }
+
+        responseStatusNotice = document.createElement("p");
+        responseStatusNotice.id = "response-status-notice";
+        responseStatusNotice.className = "response-status-notice";
+        responseStatusNotice.setAttribute("aria-live", "polite");
+        responseStatusNotice.hidden = true;
+        responseSummary.insertAdjacentElement("afterend", responseStatusNotice);
+        return responseStatusNotice;
+      }
+
+      function setResponseStatusNotice(message, isWarning) {
+        const statusNotice = ensureResponseStatusNotice();
+        if (!statusNotice) {
+          return;
+        }
+
+        if (!message) {
+          statusNotice.textContent = "";
+          statusNotice.hidden = true;
+          statusNotice.classList.remove("is-warning");
+          return;
+        }
+
+        statusNotice.textContent = message;
+        statusNotice.hidden = false;
+        statusNotice.classList.toggle("is-warning", Boolean(isWarning));
+      }
+
+      function clearResponseReconnectTimer() {
+        if (responseReconnectTimerId) {
+          clearTimeout(responseReconnectTimerId);
+          responseReconnectTimerId = null;
+        }
+      }
+
+      function getResponseReconnectDelayMs() {
+        const exponentialDelay = responseReconnectBaseDelayMs * Math.pow(2, Math.min(responseReconnectAttempts, 5));
+        const jitter = Math.floor(Math.random() * 450);
+        return Math.min(responseReconnectMaxDelayMs, exponentialDelay + jitter);
+      }
+
+      function setResponseBackendReady(isReady, options) {
+        const config = options && typeof options === "object" ? options : {};
+        isResponseBackendReady = Boolean(isReady);
+
+        if (isResponseBackendReady) {
+          responseReconnectAttempts = 0;
+          clearResponseReconnectTimer();
+          setResponseStatusNotice("", false);
+        } else if (config.showNotice !== false) {
+          setResponseStatusNotice(responseUnavailableMessage, true);
+        }
+
+        updateResponseButtonsState();
+      }
+
+      function scheduleResponseReconnect() {
+        if (responseReconnectTimerId || isResponseReconnectInProgress) {
+          return;
+        }
+
+        const reconnectDelayMs = getResponseReconnectDelayMs();
+        responseReconnectAttempts += 1;
+        responseReconnectTimerId = setTimeout(() => {
+          responseReconnectTimerId = null;
+          runResponseReconnectAttempt();
+        }, reconnectDelayMs);
+      }
+
+      function reportResponseConnectionFailure(error, context, options) {
+        const config = options && typeof options === "object" ? options : {};
+
+        if (config.log !== false) {
+          console.error("[responses] " + context, error);
+        }
+
+        setResponseBackendReady(false, {
+          showNotice: config.showNotice !== false,
+        });
+        scheduleResponseReconnect();
+      }
+
       function updateCountdown() {
         if (!countdownChip) {
           return;
@@ -294,7 +390,7 @@
       }
 
       function updateResponseButtonsState() {
-        const shouldDisable = hasSubmittedResponse || isResponseSubmissionPending;
+        const shouldDisable = hasSubmittedResponse || isResponseSubmissionPending || !isResponseBackendReady;
 
         if (interestedButton) {
           interestedButton.disabled = shouldDisable;
@@ -340,7 +436,25 @@
         }
 
         hasShownBackendUnavailableNotice = true;
-        showToast("Live backend is not configured. Add Supabase keys in assets/js/config.js.");
+        console.warn("[responses] Supabase client is unavailable. Falling back to same-origin API when possible.");
+      }
+
+      function withTimeout(promise, timeoutMs, timeoutMessage) {
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            reject(new Error(timeoutMessage || "Request timed out."));
+          }, timeoutMs);
+
+          promise
+            .then((result) => {
+              clearTimeout(timer);
+              resolve(result);
+            })
+            .catch((error) => {
+              clearTimeout(timer);
+              reject(error);
+            });
+        });
       }
 
       async function callBackendRpc(functionName, params) {
@@ -352,9 +466,26 @@
           });
         }
 
-        const { data, error } = await supabaseClient.rpc(functionName, params || {});
+        let rpcResponse;
+        try {
+          rpcResponse = await withTimeout(
+            supabaseClient.rpc(functionName, params || {}),
+            responseRpcTimeoutMs,
+            "Backend request timed out."
+          );
+        } catch (error) {
+          console.error("[backend rpc] " + functionName + " request failed.", error);
+          return buildResult(503, {
+            error: "backend_unreachable",
+            message: error && error.message ? error.message : "Unable to reach backend.",
+          });
+        }
+
+        const data = rpcResponse && Object.prototype.hasOwnProperty.call(rpcResponse, "data") ? rpcResponse.data : null;
+        const error = rpcResponse && Object.prototype.hasOwnProperty.call(rpcResponse, "error") ? rpcResponse.error : null;
 
         if (error) {
+          console.error("[backend rpc] " + functionName + " returned an error.", error);
           return buildResult(500, {
             error: "rpc_error",
             message: error.message || "Unable to reach backend.",
@@ -362,8 +493,135 @@
         }
 
         const payload = data && typeof data === "object" ? data : {};
-        const status = Number.isFinite(payload.status) ? Number(payload.status) : 200;
+        const statusNumber = typeof payload.status === "number" ? payload.status : Number(payload.status);
+        const status = Number.isFinite(statusNumber) ? statusNumber : 200;
         return buildResult(status, payload);
+      }
+
+      function mergeRequestHeaders(defaultHeaders, requestHeaders) {
+        const merged = {};
+        const defaults = defaultHeaders && typeof defaultHeaders === "object" ? defaultHeaders : {};
+        const requested = requestHeaders && typeof requestHeaders === "object" ? requestHeaders : {};
+
+        const defaultKeys = Object.keys(defaults);
+        for (let i = 0; i < defaultKeys.length; i += 1) {
+          merged[defaultKeys[i]] = defaults[defaultKeys[i]];
+        }
+
+        const requestedKeys = Object.keys(requested);
+        for (let i = 0; i < requestedKeys.length; i += 1) {
+          merged[requestedKeys[i]] = requested[requestedKeys[i]];
+        }
+
+        return merged;
+      }
+
+      async function fetchFromHttpApi(url, options) {
+        const requestOptions = options && typeof options === "object" ? options : {};
+        const method = String(requestOptions.method || "GET").toUpperCase();
+        const hasBody = Object.prototype.hasOwnProperty.call(requestOptions, "body");
+        const headers = mergeRequestHeaders(
+          hasBody ? { "Content-Type": "application/json" } : {},
+          requestOptions.headers
+        );
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+        }, responseHttpTimeoutMs);
+
+        try {
+          const response = await fetch(url, {
+            method,
+            headers,
+            body: hasBody ? requestOptions.body : undefined,
+            cache: requestOptions.cache,
+            credentials: "same-origin",
+            signal: controller.signal,
+          });
+
+          const contentType = response.headers.get("content-type") || "";
+          let payload = {};
+
+          if (contentType.includes("application/json")) {
+            payload = await response.json();
+          } else {
+            const textPayload = await response.text();
+            payload = textPayload ? { message: textPayload.slice(0, 240) } : {};
+          }
+
+          return buildResult(response.status, payload);
+        } catch (error) {
+          console.error("[http api] Request failed for " + method + " " + url + ".", error);
+          return buildResult(503, {
+            error: "http_unreachable",
+            message: error && error.message ? error.message : "HTTP backend request failed.",
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      }
+
+      async function callBackendWithFallback(functionName, params, requestUrl, requestOptions) {
+        const rpcResult = await callBackendRpc(functionName, params || {});
+        if (rpcResult.ok || rpcResult.status === 400 || rpcResult.status === 403 || rpcResult.status === 409) {
+          return rpcResult;
+        }
+
+        const fallbackResult = await fetchFromHttpApi(requestUrl.toString(), requestOptions);
+        if (fallbackResult.ok || fallbackResult.status === 400 || fallbackResult.status === 403 || fallbackResult.status === 409) {
+          return fallbackResult;
+        }
+
+        if (fallbackResult.status === 404 || fallbackResult.status === 405) {
+          return rpcResult;
+        }
+
+        if (rpcResult.status >= 500) {
+          return rpcResult;
+        }
+
+        return fallbackResult;
+      }
+
+      function waitForDuration(durationMs) {
+        return new Promise((resolve) => {
+          setTimeout(resolve, durationMs);
+        });
+      }
+
+      function shouldRetryResponseSubmission(result) {
+        if (!result) {
+          return true;
+        }
+
+        return result.status === 408 || result.status === 429 || result.status === 503 || result.status >= 500;
+      }
+
+      async function submitResponseWithRetry(payload) {
+        const maxAttempts = 3;
+        let latestResult = null;
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+          latestResult = await fetchJson(responseApiBaseUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          });
+
+          if (!shouldRetryResponseSubmission(latestResult) || attempt === maxAttempts) {
+            return latestResult;
+          }
+
+          const retryDelayMs = 360 * Math.pow(2, attempt - 1);
+          await waitForDuration(retryDelayMs);
+        }
+
+        return latestResult || buildResult(503, {
+          error: "submission_unavailable",
+          message: "Unable to submit your response right now.",
+        });
       }
 
       async function fetchJson(url, options) {
@@ -383,40 +641,40 @@
         }
 
         if (requestUrl.pathname === responseApiBaseUrl && method === "GET") {
-          return callBackendRpc("get_reaction_state", {});
+          return callBackendWithFallback("get_reaction_state", {}, requestUrl, requestOptions);
         }
 
         if (requestUrl.pathname === responseApiBaseUrl + "/vote-status" && method === "GET") {
-          return callBackendRpc("get_vote_status", {
+          return callBackendWithFallback("get_vote_status", {
             p_voter_id: requestUrl.searchParams.get("voterId") || "",
-          });
+          }, requestUrl, requestOptions);
         }
 
         if (requestUrl.pathname === responseApiBaseUrl && method === "POST") {
-          return callBackendRpc("submit_vote", {
+          return callBackendWithFallback("submit_vote", {
             p_voter_id: body && typeof body.voterId === "string" ? body.voterId : "",
             p_response_type: body && typeof body.responseType === "string" ? body.responseType : "",
-          });
+          }, requestUrl, requestOptions);
         }
 
         if (requestUrl.pathname === responseApiBaseUrl + "/reset" && method === "POST") {
-          return callBackendRpc("reset_reactions", {});
+          return callBackendWithFallback("reset_reactions", {}, requestUrl, requestOptions);
         }
 
         if (requestUrl.pathname === eventRegistrationApiBaseUrl && method === "GET") {
-          return callBackendRpc("get_registration_state", {
+          return callBackendWithFallback("get_registration_state", {
             p_event_id: requestUrl.searchParams.get("eventId") || "",
-          });
+          }, requestUrl, requestOptions);
         }
 
         if (requestUrl.pathname === eventRegistrationApiBaseUrl && method === "POST") {
-          return callBackendRpc("submit_event_registration", {
+          return callBackendWithFallback("submit_event_registration", {
             p_event_id: body && typeof body.eventId === "string" ? body.eventId : "",
             p_family: body && typeof body.family === "string" ? body.family : "",
             p_name: body && typeof body.name === "string" ? body.name : null,
             p_captain: body && typeof body.captain === "string" ? body.captain : null,
             p_members: body && Array.isArray(body.members) ? body.members : null,
-          });
+          }, requestUrl, requestOptions);
         }
 
         return buildResult(404, {
@@ -428,10 +686,13 @@
       async function fetchResponseSnapshot() {
         const result = await fetchJson(responseApiBaseUrl, { cache: "no-store" });
         if (!result.ok) {
-          throw new Error("Could not fetch response counts.");
+          const snapshotError = new Error("Could not fetch response counts.");
+          snapshotError.result = result;
+          throw snapshotError;
         }
 
         renderResponseCounts(getResponseStatePayload(result.payload));
+        setResponseBackendReady(true, { showNotice: false });
         return result.payload;
       }
 
@@ -439,9 +700,12 @@
         const voteStatusUrl = responseApiBaseUrl + "/vote-status?voterId=" + encodeURIComponent(voterId);
         const result = await fetchJson(voteStatusUrl, { cache: "no-store" });
         if (!result.ok) {
-          throw new Error("Could not fetch vote status.");
+          const voteStatusError = new Error("Could not fetch vote status.");
+          voteStatusError.result = result;
+          throw voteStatusError;
         }
 
+        setResponseBackendReady(true, { showNotice: false });
         return result.payload;
       }
 
@@ -455,12 +719,36 @@
           setResponseSelection("", true);
         }
 
+        setResponseBackendReady(true, { showNotice: false });
+
         return { snapshot, status };
       }
 
+      async function runResponseReconnectAttempt() {
+        if (isResponseReconnectInProgress) {
+          return;
+        }
+
+        isResponseReconnectInProgress = true;
+        try {
+          await synchronizeResponseState();
+          setResponseBackendReady(true, { showNotice: false });
+        } catch (error) {
+          reportResponseConnectionFailure(error, "Background reconnect attempt failed.", {
+            log: true,
+            showNotice: true,
+          });
+        } finally {
+          isResponseReconnectInProgress = false;
+        }
+      }
+
       function onResponseStreamMessage() {
-        synchronizeResponseState().catch(() => {
-          // Keep background sync silent.
+        synchronizeResponseState().catch((error) => {
+          reportResponseConnectionFailure(error, "Realtime reaction sync failed.", {
+            log: false,
+            showNotice: true,
+          });
         });
       }
 
@@ -470,8 +758,11 @@
         }
 
         responsePollIntervalId = setInterval(() => {
-          fetchResponseSnapshot().catch(() => {
-            // Keep background polling silent to avoid toast noise.
+          fetchResponseSnapshot().catch((error) => {
+            reportResponseConnectionFailure(error, "Polling response snapshot failed.", {
+              log: false,
+              showNotice: true,
+            });
           });
         }, responsePollingIntervalMs);
       }
@@ -516,12 +807,14 @@
       async function initializeResponseCounters() {
         setResponseSelection(getStoredResponseType(), false);
         renderResponseCounts(responseCounts);
+        setResponseBackendReady(false, { showNotice: false });
 
         try {
           await synchronizeResponseState();
         } catch (error) {
-          fetchResponseSnapshot().catch(() => {
-            showToast("Live response counter is unavailable. Retrying in background.");
+          reportResponseConnectionFailure(error, "Initial response sync failed.", {
+            log: true,
+            showNotice: true,
           });
         }
 
@@ -657,6 +950,13 @@
           return;
         }
 
+        if (!isResponseBackendReady) {
+          setResponseStatusNotice(responseUnavailableMessage, true);
+          scheduleResponseReconnect();
+          showToast(responseUnavailableMessage);
+          return;
+        }
+
         if (hasSubmittedResponse) {
           showToast("You already submitted a response on this browser.");
           return;
@@ -682,15 +982,9 @@
         renderResponseCounts(optimisticCounts);
 
         try {
-          const result = await fetchJson(responseApiBaseUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              responseType,
-              voterId: getOrCreateResponseVoterId(),
-            }),
+          const result = await submitResponseWithRetry({
+            responseType,
+            voterId: getOrCreateResponseVoterId(),
           });
 
           if (result.status === 409) {
@@ -702,19 +996,46 @@
           }
 
           if (!result.ok) {
-            throw new Error("Failed to submit response.");
+            const submitError = new Error("Failed to submit response.");
+            submitError.result = result;
+            throw submitError;
           }
 
           renderResponseCounts(getResponseStatePayload(result.payload));
+          setResponseBackendReady(true, { showNotice: false });
           const acceptedType = result.payload && isValidResponseType(result.payload.responseType) ? result.payload.responseType : responseType;
           setResponseSelection(acceptedType, true);
 
           const total = responseCounts.interested + responseCounts.excited;
           showToast("Thanks for your response. Total reactions: " + total + ".");
         } catch (error) {
+          console.error("[responses] Could not submit vote.", error);
           renderResponseCounts(previousCounts);
           setResponseSelection(previousSelection, true);
-          showToast("Could not submit your response. Please try again.");
+
+          const failedResult = error && error.result ? error.result : null;
+          if (failedResult && failedResult.status >= 500) {
+            reportResponseConnectionFailure(error, "Vote submission failed due to backend error.", {
+              log: false,
+              showNotice: true,
+            });
+          }
+
+          let submitErrorMessage = "Could not submit your response. Please try again.";
+          if (failedResult && failedResult.status === 503) {
+            submitErrorMessage = responseUnavailableMessage;
+          } else if (failedResult && failedResult.status >= 500) {
+            submitErrorMessage = "Could not submit your response right now. Reconnecting in background.";
+          } else if (
+            failedResult &&
+            failedResult.payload &&
+            typeof failedResult.payload.message === "string" &&
+            failedResult.payload.message.trim()
+          ) {
+            submitErrorMessage = failedResult.payload.message.trim();
+          }
+
+          showToast(submitErrorMessage);
         } finally {
           isResponseSubmissionPending = false;
           updateResponseButtonsState();
@@ -1527,6 +1848,8 @@
       }
 
       window.addEventListener("beforeunload", () => {
+        clearResponseReconnectTimer();
+
         if (responsePollIntervalId) {
           clearInterval(responsePollIntervalId);
         }

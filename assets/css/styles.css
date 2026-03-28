@@ -828,6 +828,19 @@
       font-size: 0.95rem;
     }
 
+    .response-status-notice {
+      margin-top: -0.2rem;
+      margin-bottom: 0.7rem;
+      min-height: 1.05em;
+      color: var(--text-300);
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+
+    .response-status-notice.is-warning {
+      color: #ffcb96;
+    }
+
     .response-admin-actions {
       display: flex;
       justify-content: center;
