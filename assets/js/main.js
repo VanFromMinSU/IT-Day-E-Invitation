@@ -61,6 +61,7 @@
       let authStateSubscription = null;
       let responseAdminActions = null;
       let resetCountsButton = null;
+      let isResetRequestPending = false;
       let responsePollIntervalId = null;
       let responseRealtimeChannel = null;
       let registrationPollIntervalId = null;
@@ -998,6 +999,8 @@
       }
 
       function removeAdminResetControls() {
+        isResetRequestPending = false;
+
         if (resetCountsButton) {
           resetCountsButton.removeEventListener("click", onAdminResetClick);
           resetCountsButton = null;
@@ -1030,6 +1033,8 @@
         resetCountsButton.id = "reset-counts-button";
         resetCountsButton.textContent = "Reset Counts";
         resetCountsButton.addEventListener("click", onAdminResetClick);
+        resetCountsButton.disabled = isResetRequestPending;
+        resetCountsButton.setAttribute("aria-busy", isResetRequestPending ? "true" : "false");
 
         responseAdminActions.appendChild(resetCountsButton);
         responseSummary.insertAdjacentElement("afterend", responseAdminActions);
@@ -1282,49 +1287,92 @@
         }
       }
 
+      function setResetButtonPendingState(isPending) {
+        isResetRequestPending = Boolean(isPending);
+
+        if (!resetCountsButton) {
+          return;
+        }
+
+        resetCountsButton.disabled = isResetRequestPending;
+        resetCountsButton.setAttribute("aria-busy", isResetRequestPending ? "true" : "false");
+      }
+
       async function resetResponseCounts(authorizationKey) {
+        const adminRequiredMessage = "Admin access required.";
+        const serverFailureMessage = "Unable to reset counts right now. Please try again later.";
         const activeAdminTokenHash = getActiveAdminTokenHash();
         const hasTokenAdminAccess = Boolean(activeAdminTokenHash);
 
         if ((!isAdminAuthorized && !hasTokenAdminAccess) || authorizationKey !== adminResetAuthorizationKey) {
-          showToast("Admin access required.");
+          console.warn("[admin reset] Reset blocked because admin authorization is missing.", {
+            isAdminAuthorized,
+            hasTokenAdminAccess,
+          });
+          showToast(adminRequiredMessage);
           return;
         }
 
-        const requestHeaders = {};
-        if (hasTokenAdminAccess) {
-          requestHeaders[adminResetTokenHeader] = activeAdminTokenHash;
+        if (isResetRequestPending) {
+          return;
         }
 
-        const result = await fetchJson(responseApiBaseUrl + "/reset", {
-          method: "POST",
-          headers: requestHeaders,
-          body: JSON.stringify({}),
-        });
+        setResetButtonPendingState(true);
 
-        if (!result.ok) {
-          if (result.status === 403) {
-            showToast("Admin access required.");
+        try {
+          const requestHeaders = {};
+          if (hasTokenAdminAccess) {
+            requestHeaders[adminResetTokenHeader] = activeAdminTokenHash;
+          }
+
+          const result = await fetchJson(responseApiBaseUrl + "/reset", {
+            method: "POST",
+            headers: requestHeaders,
+            body: JSON.stringify({}),
+          });
+
+          if (!result.ok) {
+            if (result.status === 403) {
+              console.warn("[admin reset] Reset request was rejected with 403.", {
+                hasTokenAdminAccess,
+                payload: result.payload,
+              });
+              showToast(adminRequiredMessage);
+              return;
+            }
+
+            console.error("[admin reset] Reset request failed.", {
+              status: result.status,
+              payload: result.payload,
+              hasTokenAdminAccess,
+            });
+            showToast(serverFailureMessage);
             return;
           }
 
-          showToast("Unable to reset counts right now.");
-          return;
+          renderResponseCounts(getResponseStatePayload(result.payload));
+          setResponseSelection("", true);
+          syncResponseStateToOtherTabs("reset");
+          showToast("Counters have been reset successfully.");
+        } catch (error) {
+          console.error("[admin reset] Reset request threw an unexpected error.", error);
+          showToast(serverFailureMessage);
+        } finally {
+          setResetButtonPendingState(false);
         }
-
-        renderResponseCounts(getResponseStatePayload(result.payload));
-        setResponseSelection("", true);
-        syncResponseStateToOtherTabs("reset");
-        showToast("Counters have been reset successfully.");
       }
 
       async function onAdminResetClick() {
+        if (isResetRequestPending) {
+          return;
+        }
+
         const hasTokenAdminAccess = Boolean(getActiveAdminTokenHash());
 
         if (!isAdminAuthorized && !hasTokenAdminAccess) {
           const signedIn = await promptAdminSignIn();
           if (!signedIn) {
-            showToast("Admin authentication required.");
+            showToast("Admin access required.");
             return;
           }
         }
@@ -1334,7 +1382,7 @@
           return;
         }
 
-        resetResponseCounts(adminResetAuthorizationKey);
+        await resetResponseCounts(adminResetAuthorizationKey);
       }
 
       function humanizeEventId(eventId) {

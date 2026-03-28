@@ -1,10 +1,11 @@
 const express = require("express");
+const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || "0.0.0.0";
-const ADMIN_TOKEN_HASH = process.env.RESPONSE_ADMIN_TOKEN_HASH || "fb7cd66cd9802076b019b15ddf51cfbfd6ae603642a4153a5b78ae8696515bd4";
+const DEFAULT_ADMIN_TOKEN_HASH = "fb7cd66cd9802076b019b15ddf51cfbfd6ae603642a4153a5b78ae8696515bd4";
 const DATA_DIR = path.join(__dirname, "data");
 const DATA_FILE = path.join(DATA_DIR, "reactions.json");
 const REGISTRATION_EVENT_IDS = new Set([
@@ -34,6 +35,34 @@ const EVENT_TITLE_MAP = {
   "sudoku-game-easy-level": "Sudoku Game (Easy Level)",
   "codm-tournament": "Call of Duty: Mobile (CODM) Tournament",
 };
+
+function normalizeAdminTokenHash(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  const normalizedValue = value.trim().toLowerCase();
+  return /^[a-f0-9]{64}$/.test(normalizedValue) ? normalizedValue : "";
+}
+
+function hashToken(value) {
+  return crypto.createHash("sha256").update(String(value || ""), "utf8").digest("hex");
+}
+
+function resolveAdminTokenHash() {
+  const configuredHash = normalizeAdminTokenHash(process.env.RESPONSE_ADMIN_TOKEN_HASH);
+  if (configuredHash) {
+    return configuredHash;
+  }
+
+  if (typeof process.env.RESPONSE_ADMIN_TOKEN === "string" && process.env.RESPONSE_ADMIN_TOKEN.trim()) {
+    return hashToken(process.env.RESPONSE_ADMIN_TOKEN.trim());
+  }
+
+  return DEFAULT_ADMIN_TOKEN_HASH;
+}
+
+const ADMIN_TOKEN_HASH = resolveAdminTokenHash();
 
 const app = express();
 app.use(express.json({ limit: "16kb" }));
@@ -487,7 +516,10 @@ app.post("/api/reactions/reset", async (req, res) => {
   const providedHash = String(req.header("X-Admin-Token-Hash") || "").trim();
 
   if (!providedHash || providedHash !== ADMIN_TOKEN_HASH) {
-    res.status(403).json({ error: "forbidden" });
+    console.warn("[admin reset] Forbidden reset attempt via /api/reactions/reset.", {
+      hasProvidedHash: Boolean(providedHash),
+    });
+    res.status(403).json({ error: "forbidden", message: "Admin access required." });
     return;
   }
 
@@ -508,7 +540,7 @@ app.post("/api/reactions/reset", async (req, res) => {
     });
   } catch (error) {
     console.error("Unable to reset votes:", error);
-    res.status(500).json({ error: "internal_error" });
+    res.status(500).json({ error: "internal_error", message: "Unable to reset counts right now. Please try again later." });
   }
 });
 
