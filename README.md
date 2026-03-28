@@ -18,6 +18,7 @@ No local Express server is required in production.
 1. Create a Supabase project.
 2. Open SQL Editor and run the migration file:
    - supabase/migrations/20260328_realtime_backend.sql
+   - supabase/migrations/20260328_admin_token_reset_support.sql
 3. In Database -> Replication, ensure Realtime is enabled for:
    - public.event_votes
    - public.event_registrations
@@ -57,7 +58,7 @@ Notes:
 
 - Regular users can read and submit reactions/registrations.
 - Reset counts requires either an authenticated admin user or a valid owner token.
-- Token mode can reset counts through the same-origin `/api/reactions/reset` fallback endpoint when configured.
+- Token mode can reset counts through Supabase RPC and, when available, the same-origin `/api/reactions/reset` fallback endpoint.
 
 ## Deployment (Always Online)
 

@@ -31,6 +31,7 @@
       const eventRegistrationPollingIntervalMs = 12000;
       const adminModeParam = "admin";
       const adminTokenParam = "adminToken";
+      const adminTokenSessionStorageKey = "itDayAdminTokenHash";
       const adminResetTokenHeader = "X-Admin-Token-Hash";
       const adminResetAuthorizationKey = {};
       const appConfig = window.APP_CONFIG && typeof window.APP_CONFIG === "object" ? window.APP_CONFIG : {};
@@ -397,15 +398,7 @@
         responseSummary.textContent = "Interested: " + normalized.interested + " | Excited: " + normalized.excited + " | Total: " + total;
       }
 
-      function isAdminResponseBypassEnabled() {
-        return isAdminAuthorized || isAdminTokenAuthorized;
-      }
-
       function updateResponseStatusFeedback() {
-        if (!isResponseBackendReady) {
-          return;
-        }
-
         if (isResponseSubmissionPending) {
           setResponseStatusNotice("Submitting your response...", false);
           return;
@@ -413,6 +406,10 @@
 
         if (hasSubmittedResponse) {
           setResponseStatusNotice(responseAlreadySubmittedMessage, false);
+          return;
+        }
+
+        if (!isResponseBackendReady) {
           return;
         }
 
@@ -471,7 +468,7 @@
       }
 
       function updateResponseButtonsState() {
-        const shouldDisable = (hasSubmittedResponse && !isAdminResponseBypassEnabled()) || isResponseSubmissionPending || !isResponseBackendReady;
+        const shouldDisable = hasSubmittedResponse || isResponseSubmissionPending || !isResponseBackendReady;
 
         if (interestedButton) {
           interestedButton.disabled = shouldDisable;
@@ -618,6 +615,50 @@
         }
 
         return false;
+      }
+
+      function getRequestHeaderValue(requestHeaders, headerName) {
+        if (!requestHeaders || typeof requestHeaders !== "object" || !headerName) {
+          return "";
+        }
+
+        const expectedHeaderName = String(headerName).toLowerCase();
+        const headerKeys = Object.keys(requestHeaders);
+        for (let i = 0; i < headerKeys.length; i += 1) {
+          if (headerKeys[i].toLowerCase() === expectedHeaderName) {
+            const headerValue = requestHeaders[headerKeys[i]];
+            return typeof headerValue === "string" ? headerValue.trim() : "";
+          }
+        }
+
+        return "";
+      }
+
+      function normalizeAdminTokenHash(value) {
+        const normalizedValue = typeof value === "string" ? value.trim().toLowerCase() : "";
+        return /^[a-f0-9]{64}$/.test(normalizedValue) ? normalizedValue : "";
+      }
+
+      function getStoredAdminTokenHash() {
+        try {
+          return normalizeAdminTokenHash(sessionStorage.getItem(adminTokenSessionStorageKey));
+        } catch (error) {
+          return "";
+        }
+      }
+
+      function persistAdminTokenHash(tokenHash) {
+        const normalizedTokenHash = normalizeAdminTokenHash(tokenHash);
+
+        try {
+          if (normalizedTokenHash) {
+            sessionStorage.setItem(adminTokenSessionStorageKey, normalizedTokenHash);
+          } else {
+            sessionStorage.removeItem(adminTokenSessionStorageKey);
+          }
+        } catch (error) {
+          // Ignore session storage errors.
+        }
       }
 
       async function fetchFromHttpApi(url, options) {
@@ -769,8 +810,14 @@
         }
 
         if (requestUrl.pathname === responseApiBaseUrl + "/reset" && method === "POST") {
-          return callBackendWithFallback("reset_reactions", {}, requestUrl, requestOptions, {
-            allowForbiddenFallback: hasAdminTokenHeader(requestOptions.headers),
+          const requestAdminTokenHash = getRequestHeaderValue(requestOptions.headers, adminResetTokenHeader);
+          const resetRpcFunctionName = requestAdminTokenHash ? "reset_reactions_with_token" : "reset_reactions";
+          const resetRpcParams = requestAdminTokenHash
+            ? { p_admin_token_hash: requestAdminTokenHash }
+            : {};
+
+          return callBackendWithFallback(resetRpcFunctionName, resetRpcParams, requestUrl, requestOptions, {
+            allowForbiddenFallback: Boolean(requestAdminTokenHash),
           });
         }
 
@@ -1035,12 +1082,27 @@
         const hadAdminTokenParam = params.has(adminTokenParam);
         isAdminModeRequested = adminModeValue === "1" || adminModeValue === "true";
 
+        const expectedAdminTokenHash = normalizeAdminTokenHash(responseAdminTokenHash);
+        let validatedTokenHash = "";
+
         if (adminTokenValue) {
-          const tokenHash = await hashStringSha256(adminTokenValue);
-          if (tokenHash && tokenHash === responseAdminTokenHash) {
-            isAdminTokenAuthorized = true;
-            adminTokenHash = tokenHash;
+          const tokenHash = normalizeAdminTokenHash(await hashStringSha256(adminTokenValue));
+          if (tokenHash && tokenHash === expectedAdminTokenHash) {
+            validatedTokenHash = tokenHash;
           }
+        } else {
+          const storedTokenHash = getStoredAdminTokenHash();
+          if (storedTokenHash && storedTokenHash === expectedAdminTokenHash) {
+            validatedTokenHash = storedTokenHash;
+          }
+        }
+
+        if (validatedTokenHash) {
+          isAdminTokenAuthorized = true;
+          adminTokenHash = validatedTokenHash;
+          persistAdminTokenHash(validatedTokenHash);
+        } else {
+          persistAdminTokenHash("");
         }
 
         if (hadAdminModeParam) {
@@ -1112,7 +1174,7 @@
           return;
         }
 
-        if (hasSubmittedResponse && !isAdminResponseBypassEnabled()) {
+        if (hasSubmittedResponse) {
           setResponseStatusNotice(responseAlreadySubmittedMessage, false);
           showToast("You have already submitted your response.");
           return;
@@ -1232,7 +1294,7 @@
         renderResponseCounts(getResponseStatePayload(result.payload));
         setResponseSelection("", true);
         syncResponseStateToOtherTabs("reset");
-        showToast("Response counts reset.");
+        showToast("Counters have been reset successfully.");
       }
 
       async function onAdminResetClick() {
