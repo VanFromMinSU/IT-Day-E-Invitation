@@ -16,7 +16,10 @@
       const teaserRegistration = document.getElementById("teaser-registration");
       const appToast = document.getElementById("app-toast");
       const countdownChip = document.getElementById("countdown-chip");
-      const responseStorageKey = "itDayResponseCounts";
+      const responseVoterStorageKey = "itDayResponseVoterId";
+      const responseChoiceStorageKey = "itDayResponseChoice";
+      const responseApiBaseUrl = "/api/reactions";
+      const responsePollingIntervalMs = 15000;
       const eventRegistrationStorageKey = "itDayEventRegistrations";
       const adminTokenParam = "adminToken";
       const adminTokenHash = "fb7cd66cd9802076b019b15ddf51cfbfd6ae603642a4153a5b78ae8696515bd4";
@@ -24,6 +27,12 @@
       let isAdminAuthorized = false;
       let responseAdminActions = null;
       let resetCountsButton = null;
+      let responsePollIntervalId = null;
+      let responseEventSource = null;
+      let responseCounts = { interested: 0, excited: 0 };
+      let hasSubmittedResponse = false;
+      let submittedResponseType = "";
+      let isResponseSubmissionPending = false;
       let toastTimer;
 
       const familyOptions = ["Family 1 - Claude", "Family 2 - Grok", "Family 3 - Gemini", "Family 4 - Dola"];
@@ -189,37 +198,68 @@
         countdownChip.textContent = "Starts in " + days + "d " + hours + "h " + minutes + "m";
       }
 
-      function getResponseCounts() {
-        const fallback = { interested: 0, excited: 0 };
+      function sanitizeResponseCount(value) {
+        const numeric = Number(value);
+        return Number.isFinite(numeric) && numeric > 0 ? Math.floor(numeric) : 0;
+      }
 
+      function normalizeResponseCounts(counts) {
+        const safeCounts = counts && typeof counts === "object" ? counts : {};
+        return {
+          interested: sanitizeResponseCount(safeCounts.interested),
+          excited: sanitizeResponseCount(safeCounts.excited),
+        };
+      }
+
+      function isValidResponseType(responseType) {
+        return responseType === "interested" || responseType === "excited";
+      }
+
+      function getStoredResponseType() {
         try {
-          const raw = localStorage.getItem(responseStorageKey);
-          if (!raw) {
-            return fallback;
-          }
-
-          const parsed = JSON.parse(raw);
-          if (!parsed || typeof parsed !== "object") {
-            return fallback;
-          }
-
-          const interested = Number(parsed.interested);
-          const excited = Number(parsed.excited);
-          return {
-            interested: Number.isFinite(interested) && interested > 0 ? Math.floor(interested) : 0,
-            excited: Number.isFinite(excited) && excited > 0 ? Math.floor(excited) : 0,
-          };
+          const stored = localStorage.getItem(responseChoiceStorageKey);
+          return isValidResponseType(stored) ? stored : "";
         } catch (error) {
-          return fallback;
+          return "";
         }
       }
 
-      function saveResponseCounts(counts) {
+      function persistResponseType(responseType) {
         try {
-          localStorage.setItem(responseStorageKey, JSON.stringify(counts));
+          if (isValidResponseType(responseType)) {
+            localStorage.setItem(responseChoiceStorageKey, responseType);
+          } else {
+            localStorage.removeItem(responseChoiceStorageKey);
+          }
         } catch (error) {
-          showToast("Response counted, but local storage is unavailable on this browser.");
+          // Ignore storage errors; server validation still prevents duplicate submissions.
         }
+      }
+
+      function getOrCreateResponseVoterId() {
+        let existing = "";
+
+        try {
+          existing = localStorage.getItem(responseVoterStorageKey) || "";
+        } catch (error) {
+          existing = "";
+        }
+
+        if (existing) {
+          return existing;
+        }
+
+        const generatedId = window.crypto && typeof window.crypto.randomUUID === "function"
+          ? window.crypto.randomUUID()
+          : "visitor-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+
+        try {
+          localStorage.setItem(responseVoterStorageKey, generatedId);
+        } catch (error) {
+          // Continue without storage persistence.
+        }
+
+        return generatedId;
       }
 
       function renderResponseCounts(counts) {
@@ -227,8 +267,151 @@
           return;
         }
 
-        const total = counts.interested + counts.excited;
-        responseSummary.textContent = "Interested: " + counts.interested + " | Excited: " + counts.excited + " | Total: " + total;
+        const normalized = normalizeResponseCounts(counts);
+        responseCounts = normalized;
+        const total = normalized.interested + normalized.excited;
+        responseSummary.textContent = "Interested: " + normalized.interested + " | Excited: " + normalized.excited + " | Total: " + total;
+      }
+
+      function updateResponseButtonsState() {
+        const shouldDisable = hasSubmittedResponse || isResponseSubmissionPending;
+
+        if (interestedButton) {
+          interestedButton.disabled = shouldDisable;
+          interestedButton.setAttribute("aria-pressed", submittedResponseType === "interested" ? "true" : "false");
+        }
+
+        if (excitedButton) {
+          excitedButton.disabled = shouldDisable;
+          excitedButton.setAttribute("aria-pressed", submittedResponseType === "excited" ? "true" : "false");
+        }
+      }
+
+      function setResponseSelection(responseType, persistSelection) {
+        submittedResponseType = isValidResponseType(responseType) ? responseType : "";
+        hasSubmittedResponse = Boolean(submittedResponseType);
+
+        if (persistSelection) {
+          persistResponseType(submittedResponseType);
+        }
+
+        updateResponseButtonsState();
+      }
+
+      function getResponseStatePayload(payload) {
+        if (payload && payload.counts && typeof payload.counts === "object") {
+          return payload.counts;
+        }
+
+        return payload;
+      }
+
+      async function fetchJson(url, options) {
+        const response = await fetch(url, options);
+        const payload = await response.json().catch(() => ({}));
+
+        return {
+          ok: response.ok,
+          status: response.status,
+          payload,
+        };
+      }
+
+      async function fetchResponseSnapshot() {
+        const result = await fetchJson(responseApiBaseUrl, { cache: "no-store" });
+        if (!result.ok) {
+          throw new Error("Could not fetch response counts.");
+        }
+
+        renderResponseCounts(getResponseStatePayload(result.payload));
+        return result.payload;
+      }
+
+      async function fetchVoteStatus(voterId) {
+        const voteStatusUrl = responseApiBaseUrl + "/vote-status?voterId=" + encodeURIComponent(voterId);
+        const result = await fetchJson(voteStatusUrl, { cache: "no-store" });
+        if (!result.ok) {
+          throw new Error("Could not fetch vote status.");
+        }
+
+        return result.payload;
+      }
+
+      async function synchronizeResponseState() {
+        const voterId = getOrCreateResponseVoterId();
+        const [snapshot, status] = await Promise.all([fetchResponseSnapshot(), fetchVoteStatus(voterId)]);
+
+        if (status && status.hasVoted && isValidResponseType(status.responseType)) {
+          setResponseSelection(status.responseType, true);
+        } else {
+          setResponseSelection("", true);
+        }
+
+        return { snapshot, status };
+      }
+
+      function onResponseStreamMessage(messageEvent) {
+        let payload = null;
+
+        try {
+          payload = JSON.parse(messageEvent.data);
+        } catch (error) {
+          return;
+        }
+
+        renderResponseCounts(getResponseStatePayload(payload));
+
+        if (payload && payload.reason === "reset") {
+          setResponseSelection("", true);
+          showToast("Response counts reset.");
+        }
+      }
+
+      function startResponsePolling() {
+        if (responsePollIntervalId) {
+          clearInterval(responsePollIntervalId);
+        }
+
+        responsePollIntervalId = setInterval(() => {
+          fetchResponseSnapshot().catch(() => {
+            // Keep background polling silent to avoid toast noise.
+          });
+        }, responsePollingIntervalMs);
+      }
+
+      function startResponseRealtimeSync() {
+        if (!("EventSource" in window)) {
+          return;
+        }
+
+        if (responseEventSource) {
+          responseEventSource.close();
+        }
+
+        responseEventSource = new EventSource(responseApiBaseUrl + "/stream");
+        responseEventSource.addEventListener("counts", onResponseStreamMessage);
+        responseEventSource.onerror = () => {
+          if (responseEventSource) {
+            responseEventSource.close();
+            responseEventSource = null;
+          }
+        };
+      }
+
+      async function initializeResponseCounters() {
+        setResponseSelection(getStoredResponseType(), false);
+        renderResponseCounts(responseCounts);
+
+        try {
+          await synchronizeResponseState();
+        } catch (error) {
+          fetchResponseSnapshot().catch(() => {
+            showToast("Live response counter is unavailable. Retrying in background.");
+          });
+        }
+
+        startResponseRealtimeSync();
+        startResponsePolling();
       }
 
       function removeAdminResetControls() {
@@ -299,32 +482,97 @@
         }
       }
 
-      function trackResponse(responseType) {
-        const counts = getResponseCounts();
-        if (responseType === "interested") {
-          counts.interested += 1;
-        } else if (responseType === "excited") {
-          counts.excited += 1;
-        } else {
+      async function trackResponse(responseType) {
+        if (!isValidResponseType(responseType)) {
           return;
         }
 
-        saveResponseCounts(counts);
-        renderResponseCounts(counts);
+        if (hasSubmittedResponse) {
+          showToast("You already submitted a response on this browser.");
+          return;
+        }
 
-        const total = counts.interested + counts.excited;
-        showToast("Thanks for your response. Total reactions: " + total + ".");
+        if (isResponseSubmissionPending) {
+          return;
+        }
+
+        const previousCounts = {
+          interested: responseCounts.interested,
+          excited: responseCounts.excited,
+        };
+        const previousSelection = submittedResponseType;
+        const optimisticCounts = {
+          interested: responseCounts.interested,
+          excited: responseCounts.excited,
+        };
+
+        optimisticCounts[responseType] += 1;
+        isResponseSubmissionPending = true;
+        setResponseSelection(responseType, true);
+        renderResponseCounts(optimisticCounts);
+
+        try {
+          const result = await fetchJson(responseApiBaseUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              responseType,
+              voterId: getOrCreateResponseVoterId(),
+            }),
+          });
+
+          if (result.status === 409) {
+            renderResponseCounts(getResponseStatePayload(result.payload));
+            const existingType = result.payload && isValidResponseType(result.payload.responseType) ? result.payload.responseType : getStoredResponseType();
+            setResponseSelection(existingType, true);
+            showToast("You already submitted a response on this browser.");
+            return;
+          }
+
+          if (!result.ok) {
+            throw new Error("Failed to submit response.");
+          }
+
+          renderResponseCounts(getResponseStatePayload(result.payload));
+          const acceptedType = result.payload && isValidResponseType(result.payload.responseType) ? result.payload.responseType : responseType;
+          setResponseSelection(acceptedType, true);
+
+          const total = responseCounts.interested + responseCounts.excited;
+          showToast("Thanks for your response. Total reactions: " + total + ".");
+        } catch (error) {
+          renderResponseCounts(previousCounts);
+          setResponseSelection(previousSelection, true);
+          showToast("Could not submit your response. Please try again.");
+        } finally {
+          isResponseSubmissionPending = false;
+          updateResponseButtonsState();
+        }
       }
 
-      function resetResponseCounts(authorizationKey) {
+      async function resetResponseCounts(authorizationKey) {
         if (!isAdminAuthorized || authorizationKey !== adminResetAuthorizationKey) {
           showToast("Admin access required.");
           return;
         }
 
-        const zeroCounts = { interested: 0, excited: 0 };
-        saveResponseCounts(zeroCounts);
-        renderResponseCounts(zeroCounts);
+        const result = await fetchJson(responseApiBaseUrl + "/reset", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Admin-Token-Hash": adminTokenHash,
+          },
+          body: JSON.stringify({}),
+        });
+
+        if (!result.ok) {
+          showToast("Unable to reset counts right now.");
+          return;
+        }
+
+        renderResponseCounts(getResponseStatePayload(result.payload));
+        setResponseSelection("", true);
         showToast("Response counts reset.");
       }
 
@@ -709,8 +957,8 @@
         document.body.classList.remove("modal-open");
       }
 
-      renderResponseCounts(getResponseCounts());
       initializeAdminAccess();
+      initializeResponseCounters();
 
       if (interestedButton) {
         interestedButton.addEventListener("click", () => {
@@ -723,6 +971,16 @@
           trackResponse("excited");
         });
       }
+
+      window.addEventListener("beforeunload", () => {
+        if (responsePollIntervalId) {
+          clearInterval(responsePollIntervalId);
+        }
+
+        if (responseEventSource) {
+          responseEventSource.close();
+        }
+      });
 
       if (teaserModal) {
         teaserModal.addEventListener("click", (event) => {
