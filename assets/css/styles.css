@@ -1133,6 +1133,23 @@
       text-align: left;
     }
 
+    .event-registration-status {
+      border: 1px solid rgba(133, 255, 159, 0.2);
+      border-radius: 10px;
+      background: rgba(11, 25, 21, 0.56);
+      padding: 0.5rem 0.62rem;
+    }
+
+    .event-registration-status-list {
+      margin: 0;
+      padding-left: 1rem;
+      display: grid;
+      gap: 0.22rem;
+      color: var(--text-200);
+      font-size: 0.81rem;
+      line-height: 1.35;
+    }
+
     .event-form-feedback.error {
       color: #ffcb96;
     }

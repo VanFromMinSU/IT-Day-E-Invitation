@@ -20,19 +20,39 @@
       const responseChoiceStorageKey = "itDayResponseChoice";
       const responseApiBaseUrl = "/api/reactions";
       const responsePollingIntervalMs = 15000;
-      const eventRegistrationStorageKey = "itDayEventRegistrations";
-      const adminTokenParam = "adminToken";
-      const adminTokenHash = "fb7cd66cd9802076b019b15ddf51cfbfd6ae603642a4153a5b78ae8696515bd4";
+      const eventRegistrationApiBaseUrl = "/api/event-registrations";
+      const eventRegistrationPollingIntervalMs = 12000;
+      const adminModeParam = "admin";
       const adminResetAuthorizationKey = {};
+      const appConfig = window.APP_CONFIG && typeof window.APP_CONFIG === "object" ? window.APP_CONFIG : {};
+      const supabaseUrl = typeof appConfig.supabaseUrl === "string" ? appConfig.supabaseUrl.trim() : "";
+      const supabaseAnonKey = typeof appConfig.supabaseAnonKey === "string" ? appConfig.supabaseAnonKey.trim() : "";
+      const supabaseModule = window.supabase && typeof window.supabase.createClient === "function" ? window.supabase : null;
+      const supabaseClient = supabaseModule && supabaseUrl && supabaseAnonKey
+        ? supabaseModule.createClient(supabaseUrl, supabaseAnonKey, {
+          auth: {
+            autoRefreshToken: true,
+            persistSession: true,
+            detectSessionInUrl: true,
+          },
+        })
+        : null;
+      const registrationEventIds = new Set(["rubiks-cube-competition", "sudoku-game-easy-level", "codm-tournament"]);
       let isAdminAuthorized = false;
+      let isAdminModeRequested = false;
+      let authStateSubscription = null;
       let responseAdminActions = null;
       let resetCountsButton = null;
       let responsePollIntervalId = null;
-      let responseEventSource = null;
+      let responseRealtimeChannel = null;
+      let registrationPollIntervalId = null;
+      let registrationRealtimeChannel = null;
       let responseCounts = { interested: 0, excited: 0 };
+      const registrationStateByEventId = {};
       let hasSubmittedResponse = false;
       let submittedResponseType = "";
       let isResponseSubmissionPending = false;
+      let hasShownBackendUnavailableNotice = false;
       let toastTimer;
 
       const familyOptions = ["Family 1 - Claude", "Family 2 - Grok", "Family 3 - Gemini", "Family 4 - Dola"];
@@ -306,15 +326,103 @@
         return payload;
       }
 
-      async function fetchJson(url, options) {
-        const response = await fetch(url, options);
-        const payload = await response.json().catch(() => ({}));
-
+      function buildResult(status, payload) {
         return {
-          ok: response.ok,
-          status: response.status,
-          payload,
+          ok: status >= 200 && status < 300,
+          status,
+          payload: payload && typeof payload === "object" ? payload : {},
         };
+      }
+
+      function showBackendUnavailableNotice() {
+        if (hasShownBackendUnavailableNotice) {
+          return;
+        }
+
+        hasShownBackendUnavailableNotice = true;
+        showToast("Live backend is not configured. Add Supabase keys in assets/js/config.js.");
+      }
+
+      async function callBackendRpc(functionName, params) {
+        if (!supabaseClient) {
+          showBackendUnavailableNotice();
+          return buildResult(503, {
+            error: "backend_unavailable",
+            message: "Supabase backend is not configured.",
+          });
+        }
+
+        const { data, error } = await supabaseClient.rpc(functionName, params || {});
+
+        if (error) {
+          return buildResult(500, {
+            error: "rpc_error",
+            message: error.message || "Unable to reach backend.",
+          });
+        }
+
+        const payload = data && typeof data === "object" ? data : {};
+        const status = Number.isFinite(payload.status) ? Number(payload.status) : 200;
+        return buildResult(status, payload);
+      }
+
+      async function fetchJson(url, options) {
+        const requestUrl = new URL(url, window.location.origin);
+        const requestOptions = options && typeof options === "object" ? options : {};
+        const method = String(requestOptions.method || "GET").toUpperCase();
+        let body = {};
+
+        if (typeof requestOptions.body === "string" && requestOptions.body) {
+          try {
+            body = JSON.parse(requestOptions.body);
+          } catch (error) {
+            body = {};
+          }
+        } else if (requestOptions.body && typeof requestOptions.body === "object") {
+          body = requestOptions.body;
+        }
+
+        if (requestUrl.pathname === responseApiBaseUrl && method === "GET") {
+          return callBackendRpc("get_reaction_state", {});
+        }
+
+        if (requestUrl.pathname === responseApiBaseUrl + "/vote-status" && method === "GET") {
+          return callBackendRpc("get_vote_status", {
+            p_voter_id: requestUrl.searchParams.get("voterId") || "",
+          });
+        }
+
+        if (requestUrl.pathname === responseApiBaseUrl && method === "POST") {
+          return callBackendRpc("submit_vote", {
+            p_voter_id: body && typeof body.voterId === "string" ? body.voterId : "",
+            p_response_type: body && typeof body.responseType === "string" ? body.responseType : "",
+          });
+        }
+
+        if (requestUrl.pathname === responseApiBaseUrl + "/reset" && method === "POST") {
+          return callBackendRpc("reset_reactions", {});
+        }
+
+        if (requestUrl.pathname === eventRegistrationApiBaseUrl && method === "GET") {
+          return callBackendRpc("get_registration_state", {
+            p_event_id: requestUrl.searchParams.get("eventId") || "",
+          });
+        }
+
+        if (requestUrl.pathname === eventRegistrationApiBaseUrl && method === "POST") {
+          return callBackendRpc("submit_event_registration", {
+            p_event_id: body && typeof body.eventId === "string" ? body.eventId : "",
+            p_family: body && typeof body.family === "string" ? body.family : "",
+            p_name: body && typeof body.name === "string" ? body.name : null,
+            p_captain: body && typeof body.captain === "string" ? body.captain : null,
+            p_members: body && Array.isArray(body.members) ? body.members : null,
+          });
+        }
+
+        return buildResult(404, {
+          error: "unsupported_route",
+          message: "Unsupported backend route.",
+        });
       }
 
       async function fetchResponseSnapshot() {
@@ -350,21 +458,10 @@
         return { snapshot, status };
       }
 
-      function onResponseStreamMessage(messageEvent) {
-        let payload = null;
-
-        try {
-          payload = JSON.parse(messageEvent.data);
-        } catch (error) {
-          return;
-        }
-
-        renderResponseCounts(getResponseStatePayload(payload));
-
-        if (payload && payload.reason === "reset") {
-          setResponseSelection("", true);
-          showToast("Response counts reset.");
-        }
+      function onResponseStreamMessage() {
+        synchronizeResponseState().catch(() => {
+          // Keep background sync silent.
+        });
       }
 
       function startResponsePolling() {
@@ -380,22 +477,40 @@
       }
 
       function startResponseRealtimeSync() {
-        if (!("EventSource" in window)) {
-          return;
+        if (!supabaseClient) {
+          return false;
         }
 
-        if (responseEventSource) {
-          responseEventSource.close();
+        if (responseRealtimeChannel) {
+          supabaseClient.removeChannel(responseRealtimeChannel);
+          responseRealtimeChannel = null;
         }
 
-        responseEventSource = new EventSource(responseApiBaseUrl + "/stream");
-        responseEventSource.addEventListener("counts", onResponseStreamMessage);
-        responseEventSource.onerror = () => {
-          if (responseEventSource) {
-            responseEventSource.close();
-            responseEventSource = null;
-          }
-        };
+        if (responsePollIntervalId) {
+          clearInterval(responsePollIntervalId);
+          responsePollIntervalId = null;
+        }
+
+        responseRealtimeChannel = supabaseClient
+          .channel("itday-reaction-updates")
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "event_votes",
+            },
+            () => {
+              onResponseStreamMessage();
+            }
+          )
+          .subscribe((status) => {
+            if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+              startResponsePolling();
+            }
+          });
+
+        return true;
       }
 
       async function initializeResponseCounters() {
@@ -410,8 +525,10 @@
           });
         }
 
-        startResponseRealtimeSync();
-        startResponsePolling();
+        const isRealtimeActive = startResponseRealtimeSync();
+        if (!isRealtimeActive) {
+          startResponsePolling();
+        }
       }
 
       function removeAdminResetControls() {
@@ -427,7 +544,7 @@
       }
 
       function ensureAdminResetControls() {
-        if (!responseSummary || responseAdminActions || !isAdminAuthorized) {
+        if (!responseSummary || responseAdminActions || (!isAdminAuthorized && !isAdminModeRequested)) {
           return;
         }
 
@@ -446,38 +563,91 @@
         responseSummary.insertAdjacentElement("afterend", responseAdminActions);
       }
 
-      async function hashText(value) {
-        if (!window.crypto || !window.crypto.subtle) {
-          return "";
+      async function refreshAdminAuthorization() {
+        if (!supabaseClient) {
+          isAdminAuthorized = false;
+          return false;
         }
 
-        const encoder = new TextEncoder();
-        const data = encoder.encode(value);
-        const digest = await window.crypto.subtle.digest("SHA-256", data);
-        const bytes = Array.from(new Uint8Array(digest));
-        return bytes.map((byte) => byte.toString(16).padStart(2, "0")).join("");
+        const { data, error } = await supabaseClient.auth.getSession();
+        if (error || !data || !data.session || !data.session.user) {
+          isAdminAuthorized = false;
+          return false;
+        }
+
+        const appMetadata = data.session.user.app_metadata || {};
+        isAdminAuthorized = appMetadata.role === "admin";
+        return isAdminAuthorized;
+      }
+
+      async function promptAdminSignIn() {
+        if (!supabaseClient) {
+          showBackendUnavailableNotice();
+          return false;
+        }
+
+        const email = window.prompt("Enter admin email:");
+        if (!email) {
+          return false;
+        }
+
+        const password = window.prompt("Enter admin password:");
+        if (!password) {
+          return false;
+        }
+
+        const { error } = await supabaseClient.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+
+        if (error) {
+          showToast("Admin sign-in failed.");
+          return false;
+        }
+
+        const isAuthorized = await refreshAdminAuthorization();
+        if (!isAuthorized) {
+          showToast("Signed-in account is not allowed to reset counts.");
+          return false;
+        }
+
+        ensureAdminResetControls();
+        return true;
       }
 
       async function initializeAdminAccess() {
-        isAdminAuthorized = false;
+        isAdminModeRequested = false;
         removeAdminResetControls();
 
         const params = new URLSearchParams(window.location.search);
-        const adminToken = params.get(adminTokenParam);
+        const adminModeValue = (params.get(adminModeParam) || "").toLowerCase();
+        isAdminModeRequested = adminModeValue === "1" || adminModeValue === "true";
 
-        if (adminToken) {
-          const tokenHash = await hashText(adminToken.trim());
-          isAdminAuthorized = tokenHash === adminTokenHash;
-        }
-
-        if (adminToken) {
-          params.delete(adminTokenParam);
+        if (params.has(adminModeParam)) {
+          params.delete(adminModeParam);
           const nextQuery = params.toString();
           const nextUrl = window.location.pathname + (nextQuery ? "?" + nextQuery : "") + window.location.hash;
           window.history.replaceState({}, document.title, nextUrl);
         }
 
-        if (isAdminAuthorized) {
+        await refreshAdminAuthorization();
+
+        if (supabaseClient && !authStateSubscription) {
+          const authListener = supabaseClient.auth.onAuthStateChange(() => {
+            refreshAdminAuthorization().then(() => {
+              if (isAdminAuthorized || isAdminModeRequested) {
+                ensureAdminResetControls();
+              } else {
+                removeAdminResetControls();
+              }
+            });
+          });
+
+          authStateSubscription = authListener && authListener.data ? authListener.data.subscription : null;
+        }
+
+        if (isAdminAuthorized || isAdminModeRequested) {
           ensureAdminResetControls();
         }
       }
@@ -559,10 +729,6 @@
 
         const result = await fetchJson(responseApiBaseUrl + "/reset", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Admin-Token-Hash": adminTokenHash,
-          },
           body: JSON.stringify({}),
         });
 
@@ -576,10 +742,13 @@
         showToast("Response counts reset.");
       }
 
-      function onAdminResetClick() {
+      async function onAdminResetClick() {
         if (!isAdminAuthorized) {
-          showToast("Admin access required.");
-          return;
+          const signedIn = await promptAdminSignIn();
+          if (!signedIn) {
+            showToast("Admin authentication required.");
+            return;
+          }
         }
 
         const approved = window.confirm("Reset all Interested and Excited counts?");
@@ -797,6 +966,399 @@
           .join("");
       }
 
+      function isManagedRegistrationEvent(eventId) {
+        return registrationEventIds.has(eventId);
+      }
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function getRegistrationStatePayload(payload) {
+        if (payload && payload.state && typeof payload.state === "object") {
+          return payload.state;
+        }
+
+        return payload;
+      }
+
+      function getRegistrationClosedValidationMessage(eventId) {
+        if (eventId === "codm-tournament") {
+          return "Registration is now closed. Maximum teams reached.";
+        }
+
+        return "Registration is now closed. Maximum participants reached.";
+      }
+
+      function getFamilyLimitValidationMessage(eventId) {
+        if (eventId === "sudoku-game-easy-level") {
+          return "This family already has 2 participants registered.";
+        }
+
+        return "This family has reached the maximum number of participants.";
+      }
+
+      function getTeamLimitValidationMessage() {
+        return "This family has already registered the maximum number of teams.";
+      }
+
+      function getTeamSizeValidationMessage() {
+        return "Each team must have exactly 4 members including the Team Captain/Leader.";
+      }
+
+      async function fetchEventRegistrationState(eventId) {
+        const requestUrl = eventRegistrationApiBaseUrl + "?eventId=" + encodeURIComponent(eventId);
+        const result = await fetchJson(requestUrl, { cache: "no-store" });
+
+        if (!result.ok) {
+          throw new Error("Could not fetch event registration state.");
+        }
+
+        const state = getRegistrationStatePayload(result.payload);
+        if (state && state.eventId) {
+          registrationStateByEventId[state.eventId] = state;
+          refreshActiveEventRegistrationFormState();
+        }
+
+        return state;
+      }
+
+      function getCachedEventRegistrationState(eventId) {
+        return eventId ? registrationStateByEventId[eventId] || null : null;
+      }
+
+      function cacheRegistrationState(state) {
+        if (!state || !state.eventId) {
+          return;
+        }
+
+        registrationStateByEventId[state.eventId] = state;
+        refreshActiveEventRegistrationFormState();
+      }
+
+      function getActiveEventId() {
+        return teaserModal ? teaserModal.dataset.activeEventId || "" : "";
+      }
+
+      function getActiveEventRegistrationForm() {
+        if (!teaserRegistration) {
+          return null;
+        }
+
+        const form = teaserRegistration.querySelector(".event-registration-form");
+        return form instanceof HTMLFormElement ? form : null;
+      }
+
+      function getFamilyAvailabilityMap(state) {
+        const stats = state && state.stats && Array.isArray(state.stats.perFamily) ? state.stats : null;
+        const availability = {};
+
+        if (!stats) {
+          return availability;
+        }
+
+        stats.perFamily.forEach((entry) => {
+          if (entry && entry.family) {
+            availability[entry.family] = entry;
+          }
+        });
+
+        return availability;
+      }
+
+      function getCurrentTeamMemberState(form) {
+        const captainField = form.elements.namedItem("captain");
+        const captain = captainField && typeof captainField.value === "string" ? captainField.value.trim() : "";
+        const memberInputs = Array.from(form.querySelectorAll('input[name="members[]"]'));
+        const members = memberInputs.map((input) => input.value.trim());
+        const filledMembers = members.filter((member) => member.length > 0);
+
+        return {
+          captain,
+          members,
+          filledMembers,
+        };
+      }
+
+      function renderEventRegistrationStatus(form, eventId, state) {
+        const statusPanel = form.querySelector("[data-registration-status='true']");
+        if (!statusPanel) {
+          return;
+        }
+
+        if (!state || !state.stats) {
+          statusPanel.innerHTML = "";
+          return;
+        }
+
+        const stats = state.stats;
+        const lines = [];
+
+        if (stats.mode === "individual") {
+          if (typeof stats.remainingParticipants === "number" && typeof stats.maxParticipants === "number") {
+            lines.push("Total remaining slots: " + stats.remainingParticipants + " / " + stats.maxParticipants + ".");
+          }
+
+          if (Array.isArray(stats.perFamily)) {
+            stats.perFamily.forEach((entry) => {
+              lines.push(entry.family + ": " + entry.count + "/" + entry.limit + " registered (remaining " + entry.remaining + ").");
+            });
+          }
+
+          if (eventId === "sudoku-game-easy-level") {
+            if (stats.allFamiliesComplete) {
+              lines.push("All families are complete with 2 participants each.");
+            } else {
+              lines.push("Each family must complete 2 participants.");
+            }
+          }
+
+          if (stats.isClosed) {
+            lines.unshift(getRegistrationClosedValidationMessage(eventId));
+          }
+        }
+
+        if (stats.mode === "team") {
+          if (typeof stats.remainingTeams === "number" && typeof stats.maxTeams === "number") {
+            lines.push("Total remaining team slots: " + stats.remainingTeams + " / " + stats.maxTeams + ".");
+          }
+
+          if (Array.isArray(stats.perFamily)) {
+            stats.perFamily.forEach((entry) => {
+              lines.push(entry.family + ": " + entry.count + "/" + entry.limit + " teams registered (remaining " + entry.remaining + ").");
+            });
+          }
+
+          const teamState = getCurrentTeamMemberState(form);
+          const currentTotal = (teamState.captain ? 1 : 0) + teamState.filledMembers.length;
+          lines.push("Current team size entered: " + currentTotal + "/4.");
+          lines.push("Each team must have exactly 4 members including the Team Captain/Leader.");
+
+          if (Array.isArray(stats.teams) && stats.teams.length > 0) {
+            const teamLabels = stats.teams.map((team) => team.teamLabel).filter((teamLabel) => Boolean(teamLabel));
+            if (teamLabels.length > 0) {
+              lines.push("Registered teams: " + teamLabels.join(", ") + ".");
+            }
+          }
+
+          if (stats.isClosed) {
+            lines.unshift(getRegistrationClosedValidationMessage(eventId));
+          }
+        }
+
+        statusPanel.innerHTML =
+          '<ul class="event-registration-status-list">' +
+          lines.map((line) => "<li>" + escapeHtml(line) + "</li>").join("") +
+          "</ul>";
+      }
+
+      function applyFamilySlotAvailability(form, state) {
+        const familySelect = form.elements.namedItem("family");
+        if (!(familySelect instanceof HTMLSelectElement)) {
+          return;
+        }
+
+        const availability = getFamilyAvailabilityMap(state);
+        const options = Array.from(familySelect.options);
+
+        options.forEach((option) => {
+          if (!option.value) {
+            option.disabled = false;
+            return;
+          }
+
+          const familyState = availability[option.value];
+          option.disabled = Boolean(familyState && familyState.remaining <= 0);
+        });
+
+        if (familySelect.value && availability[familySelect.value] && availability[familySelect.value].remaining <= 0) {
+          familySelect.value = "";
+        }
+      }
+
+      function setFormControlsDisabled(form, disabled) {
+        const controls = form.querySelectorAll("input, select, button[type='submit'], button[data-add-member='true'], button[data-remove-member='true']");
+        controls.forEach((control) => {
+          control.disabled = disabled;
+        });
+      }
+
+      function updateTeamSubmitAvailability(form, state) {
+        const submitButton = form.querySelector('button[type="submit"]');
+        if (!(submitButton instanceof HTMLButtonElement)) {
+          return;
+        }
+
+        const stats = state && state.stats ? state.stats : null;
+        if (stats && stats.isClosed) {
+          submitButton.disabled = true;
+          return;
+        }
+
+        if ((form.dataset.registrationType || "") !== "team") {
+          return;
+        }
+
+        const teamState = getCurrentTeamMemberState(form);
+        const hasEmptyMemberSlot = teamState.members.some((member) => member.length === 0);
+        submitButton.disabled = !teamState.captain || hasEmptyMemberSlot || teamState.filledMembers.length !== 3;
+      }
+
+      function refreshEventRegistrationFormState(form, eventId) {
+        const state = getCachedEventRegistrationState(eventId);
+        renderEventRegistrationStatus(form, eventId, state);
+
+        if (!state || !state.stats) {
+          updateTeamSubmitAvailability(form, null);
+          return;
+        }
+
+        const stats = state.stats;
+        const isClosed = Boolean(stats.isClosed);
+
+        setFormControlsDisabled(form, isClosed);
+
+        if (!isClosed) {
+          applyFamilySlotAvailability(form, state);
+        }
+
+        updateTeamSubmitAvailability(form, state);
+
+        if (isClosed) {
+          setEventFormFeedback(form, getRegistrationClosedValidationMessage(eventId), true);
+        }
+      }
+
+      function refreshActiveEventRegistrationFormState() {
+        const activeEventId = getActiveEventId();
+        const form = getActiveEventRegistrationForm();
+
+        if (!activeEventId || !form) {
+          return;
+        }
+
+        refreshEventRegistrationFormState(form, activeEventId);
+      }
+
+      function stopRegistrationRealtimeSync() {
+        if (registrationPollIntervalId) {
+          clearInterval(registrationPollIntervalId);
+          registrationPollIntervalId = null;
+        }
+
+        if (registrationRealtimeChannel && supabaseClient) {
+          supabaseClient.removeChannel(registrationRealtimeChannel);
+          registrationRealtimeChannel = null;
+        }
+
+      }
+
+      function onRegistrationStreamMessage(eventId) {
+        if (!eventId) {
+          return;
+        }
+
+        fetchEventRegistrationState(eventId).catch(() => {
+          // Keep background sync silent.
+        });
+      }
+
+      function startRegistrationPolling(eventId) {
+        if (registrationPollIntervalId) {
+          clearInterval(registrationPollIntervalId);
+        }
+
+        registrationPollIntervalId = setInterval(() => {
+          fetchEventRegistrationState(eventId).catch(() => {
+            // Keep background polling silent.
+          });
+        }, eventRegistrationPollingIntervalMs);
+      }
+
+      function startRegistrationRealtimeSync(eventId) {
+        if (!supabaseClient || !isManagedRegistrationEvent(eventId)) {
+          return false;
+        }
+
+        if (registrationRealtimeChannel) {
+          supabaseClient.removeChannel(registrationRealtimeChannel);
+          registrationRealtimeChannel = null;
+        }
+
+        if (registrationPollIntervalId) {
+          clearInterval(registrationPollIntervalId);
+          registrationPollIntervalId = null;
+        }
+
+        registrationRealtimeChannel = supabaseClient
+          .channel("itday-registration-" + eventId)
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "event_registrations",
+              filter: "event_id=eq." + eventId,
+            },
+            () => {
+              onRegistrationStreamMessage(eventId);
+            }
+          )
+          .subscribe((status) => {
+            if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+              startRegistrationPolling(eventId);
+            }
+          });
+
+        return true;
+      }
+
+      async function activateRegistrationSync(eventId) {
+        stopRegistrationRealtimeSync();
+
+        if (!isManagedRegistrationEvent(eventId)) {
+          return;
+        }
+
+        try {
+          await fetchEventRegistrationState(eventId);
+        } catch (error) {
+          showToast("Live registration updates are unavailable. Retrying in background.");
+        }
+
+        const isRealtimeActive = startRegistrationRealtimeSync(eventId);
+        if (!isRealtimeActive) {
+          startRegistrationPolling(eventId);
+        }
+      }
+
+      async function ensureLatestRegistrationState(eventId) {
+        if (!isManagedRegistrationEvent(eventId)) {
+          return null;
+        }
+
+        try {
+          return await fetchEventRegistrationState(eventId);
+        } catch (error) {
+          return getCachedEventRegistrationState(eventId);
+        }
+      }
+
+      async function submitEventRegistration(payload) {
+        return fetchJson(eventRegistrationApiBaseUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+      }
+
       function showSelectedEventDetails(eventId) {
         const details = getEventDetailsById(eventId);
         if (!teaserTitle || !teaserVenue || !teaserMechanics) {
@@ -810,38 +1372,23 @@
         teaserModal.dataset.activeEventId = details.eventId;
         teaserModal.dataset.activeEventTitle = details.title;
         setTeaserStep("details");
-      }
-
-      function getEventRegistrations() {
-        try {
-          const raw = localStorage.getItem(eventRegistrationStorageKey);
-          if (!raw) {
-            return [];
-          }
-
-          const parsed = JSON.parse(raw);
-          return Array.isArray(parsed) ? parsed : [];
-        } catch (error) {
-          return [];
-        }
-      }
-
-      function saveEventRegistration(payload) {
-        const existing = getEventRegistrations();
-        existing.push(payload);
-
-        try {
-          localStorage.setItem(eventRegistrationStorageKey, JSON.stringify(existing));
-          return true;
-        } catch (error) {
-          return false;
-        }
+        activateRegistrationSync(details.eventId);
+        refreshActiveEventRegistrationFormState();
       }
 
       function buildFamilyOptionsMarkup() {
         return familyOptions
           .map((family) => '<option value="' + family + '">' + family + "</option>")
           .join("");
+      }
+
+      function buildTeamMemberRowMarkup() {
+        return (
+          '<div class="event-member-row">' +
+          '<input name="members[]" type="text" placeholder="Member name" required />' +
+          '<button type="button" class="event-member-remove" data-remove-member="true" aria-label="Remove member">Remove</button>' +
+          "</div>"
+        );
       }
 
       function renderEventRegistration(details) {
@@ -869,6 +1416,7 @@
             '<input id="event-name" name="name" type="text" autocomplete="name" placeholder="Enter participant name" required />' +
             "</div>" +
             "</div>" +
+            '<div class="event-registration-status" data-registration-status="true" aria-live="polite"></div>' +
             '<p class="event-form-feedback" aria-live="polite"></p>' +
             '<div class="registration-actions event-form-actions">' +
             '<button type="submit" class="btn btn-primary">Submit Registration</button>' +
@@ -896,13 +1444,9 @@
           "<strong>Members</strong>" +
           '<button type="button" class="btn btn-secondary event-inline-button" data-add-member="true">Add Member</button>' +
           "</div>" +
-          '<div class="event-members-list">' +
-          '<div class="event-member-row">' +
-          '<input name="members[]" type="text" placeholder="Member name" required />' +
-          '<button type="button" class="event-member-remove" data-remove-member="true" aria-label="Remove member">Remove</button>' +
+          '<div class="event-members-list">' + buildTeamMemberRowMarkup() + buildTeamMemberRowMarkup() + buildTeamMemberRowMarkup() + "</div>" +
           "</div>" +
-          "</div>" +
-          "</div>" +
+          '<div class="event-registration-status" data-registration-status="true" aria-live="polite"></div>' +
           '<p class="event-form-feedback" aria-live="polite"></p>' +
           '<div class="registration-actions event-form-actions">' +
           '<button type="submit" class="btn btn-primary">Submit Team Registration</button>' +
@@ -917,6 +1461,14 @@
           '<input name="members[]" type="text" placeholder="Member name" required />' +
           '<button type="button" class="event-member-remove" data-remove-member="true" aria-label="Remove member">Remove</button>';
         membersList.appendChild(memberRow);
+      }
+
+      function resetTeamMembers(membersList, count) {
+        membersList.innerHTML = "";
+
+        for (let i = 0; i < count; i += 1) {
+          addTeamMemberRow(membersList);
+        }
       }
 
       function setEventFormFeedback(form, message, isError) {
@@ -948,6 +1500,8 @@
           return;
         }
 
+        stopRegistrationRealtimeSync();
+
         teaserModal.classList.remove("is-open");
         teaserModal.setAttribute("aria-hidden", "true");
         teaserModal.dataset.activeEventId = "";
@@ -977,9 +1531,17 @@
           clearInterval(responsePollIntervalId);
         }
 
-        if (responseEventSource) {
-          responseEventSource.close();
+        if (responseRealtimeChannel && supabaseClient) {
+          supabaseClient.removeChannel(responseRealtimeChannel);
+          responseRealtimeChannel = null;
         }
+
+        if (authStateSubscription && typeof authStateSubscription.unsubscribe === "function") {
+          authStateSubscription.unsubscribe();
+          authStateSubscription = null;
+        }
+
+        stopRegistrationRealtimeSync();
       });
 
       if (teaserModal) {
@@ -1008,7 +1570,19 @@
             const form = addMemberButton.closest(".event-registration-form");
             const membersList = form ? form.querySelector(".event-members-list") : null;
             if (membersList) {
+              const rows = membersList.querySelectorAll(".event-member-row");
+              if (rows.length >= 3) {
+                if (form instanceof HTMLFormElement) {
+                  setEventFormFeedback(form, getTeamSizeValidationMessage(), true);
+                }
+                return;
+              }
+
               addTeamMemberRow(membersList);
+              const activeEventId = getActiveEventId();
+              if (form instanceof HTMLFormElement && activeEventId) {
+                refreshEventRegistrationFormState(form, activeEventId);
+              }
             }
             return;
           }
@@ -1032,17 +1606,52 @@
             const row = removeMemberButton.closest(".event-member-row");
             if (row) {
               row.remove();
+              const form = membersList.closest(".event-registration-form");
+              const activeEventId = getActiveEventId();
+              if (form instanceof HTMLFormElement && activeEventId) {
+                refreshEventRegistrationFormState(form, activeEventId);
+              }
             }
           }
         });
 
-        teaserModal.addEventListener("submit", (event) => {
+        teaserModal.addEventListener("input", (event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLElement)) {
+            return;
+          }
+
+          const form = target.closest(".event-registration-form");
+          const activeEventId = getActiveEventId();
+          if (form instanceof HTMLFormElement && activeEventId) {
+            refreshEventRegistrationFormState(form, activeEventId);
+          }
+        });
+
+        teaserModal.addEventListener("change", (event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLElement)) {
+            return;
+          }
+
+          const form = target.closest(".event-registration-form");
+          const activeEventId = getActiveEventId();
+          if (form instanceof HTMLFormElement && activeEventId) {
+            refreshEventRegistrationFormState(form, activeEventId);
+          }
+        });
+
+        teaserModal.addEventListener("submit", async (event) => {
           const form = event.target;
           if (!(form instanceof HTMLFormElement) || !form.classList.contains("event-registration-form")) {
             return;
           }
 
           event.preventDefault();
+
+          if (form.dataset.isSubmitting === "true") {
+            return;
+          }
 
           const registrationType = form.dataset.registrationType || "coming-soon";
           const activeEventId = teaserModal.dataset.activeEventId || "event";
@@ -1053,6 +1662,29 @@
           if (!trimmedFamily) {
             setEventFormFeedback(form, "Please select a family.", true);
             return;
+          }
+
+          const latestState = await ensureLatestRegistrationState(activeEventId);
+          if (latestState && latestState.stats && latestState.stats.isClosed) {
+            setEventFormFeedback(form, getRegistrationClosedValidationMessage(activeEventId), true);
+            refreshEventRegistrationFormState(form, activeEventId);
+            return;
+          }
+
+          if (latestState && latestState.stats && Array.isArray(latestState.stats.perFamily)) {
+            const familyEntry = latestState.stats.perFamily.find((entry) => entry.family === trimmedFamily);
+
+            if (registrationType === "individual" && familyEntry && familyEntry.count >= 2) {
+              setEventFormFeedback(form, getFamilyLimitValidationMessage(activeEventId), true);
+              refreshEventRegistrationFormState(form, activeEventId);
+              return;
+            }
+
+            if (registrationType === "team" && familyEntry && familyEntry.count >= 2) {
+              setEventFormFeedback(form, getTeamLimitValidationMessage(), true);
+              refreshEventRegistrationFormState(form, activeEventId);
+              return;
+            }
           }
 
           if (registrationType === "individual") {
@@ -1066,60 +1698,97 @@
 
             const payload = {
               eventId: activeEventId,
-              eventTitle: activeEventTitle,
-              registrationType,
               family: trimmedFamily,
               name: participantName,
-              submittedAt: new Date().toISOString(),
             };
 
-            const saved = saveEventRegistration(payload);
-            setEventFormFeedback(form, saved ? "Registration submitted successfully." : "Registration captured, but local storage is unavailable.", !saved);
-            showToast(saved ? "Registration submitted for " + activeEventTitle + "." : "Registration saved in session only.");
-            if (saved) {
+            form.dataset.isSubmitting = "true";
+
+            try {
+              const result = await submitEventRegistration(payload);
+              const nextState = getRegistrationStatePayload(result.payload);
+              cacheRegistrationState(nextState);
+
+              if (!result.ok) {
+                const message = result.payload && result.payload.message
+                  ? result.payload.message
+                  : "Unable to submit registration right now.";
+                setEventFormFeedback(form, message, true);
+                showToast(message);
+                return;
+              }
+
+              setEventFormFeedback(form, "Registration submitted successfully.", false);
+              showToast("Registration submitted for " + activeEventTitle + ".");
               form.reset();
+            } finally {
+              form.dataset.isSubmitting = "false";
+              refreshEventRegistrationFormState(form, activeEventId);
             }
+
             return;
           }
 
           if (registrationType === "team") {
-            const captainField = form.elements.namedItem("captain");
-            const captain = captainField && typeof captainField.value === "string" ? captainField.value.trim() : "";
-            const members = Array.from(form.querySelectorAll('input[name="members[]"]'))
-              .map((input) => input.value.trim())
-              .filter((value) => value.length > 0);
+            const teamState = getCurrentTeamMemberState(form);
+            const captain = teamState.captain;
+            const members = teamState.members;
+            const filledMembers = teamState.filledMembers;
 
             if (!captain) {
               setEventFormFeedback(form, "Please enter the team captain.", true);
               return;
             }
 
-            if (members.length === 0) {
-              setEventFormFeedback(form, "Please add at least one team member.", true);
+            if (members.some((member) => member.length === 0)) {
+              setEventFormFeedback(form, "Please complete all team member fields or remove extras.", true);
+              return;
+            }
+
+            if (filledMembers.length !== 3) {
+              setEventFormFeedback(form, getTeamSizeValidationMessage(), true);
               return;
             }
 
             const payload = {
               eventId: activeEventId,
-              eventTitle: activeEventTitle,
-              registrationType,
               family: trimmedFamily,
               captain,
-              members,
-              submittedAt: new Date().toISOString(),
+              members: filledMembers,
             };
 
-            const saved = saveEventRegistration(payload);
-            setEventFormFeedback(form, saved ? "Team registration submitted successfully." : "Registration captured, but local storage is unavailable.", !saved);
-            showToast(saved ? "Team registered for " + activeEventTitle + "." : "Registration saved in session only.");
-            if (saved) {
+            form.dataset.isSubmitting = "true";
+
+            try {
+              const result = await submitEventRegistration(payload);
+              const nextState = getRegistrationStatePayload(result.payload);
+              cacheRegistrationState(nextState);
+
+              if (!result.ok) {
+                const message = result.payload && result.payload.message
+                  ? result.payload.message
+                  : "Unable to submit team registration right now.";
+                setEventFormFeedback(form, message, true);
+                showToast(message);
+                return;
+              }
+
+              const teamLabel = result.payload && result.payload.registration
+                ? result.payload.registration.teamLabel || ""
+                : "";
+
+              setEventFormFeedback(form, "Team registration submitted successfully.", false);
+              showToast(teamLabel ? teamLabel + " registered for " + activeEventTitle + "." : "Team registered for " + activeEventTitle + ".");
               form.reset();
               const membersList = form.querySelector(".event-members-list");
               if (membersList) {
-                membersList.innerHTML = "";
-                addTeamMemberRow(membersList);
+                resetTeamMembers(membersList, 3);
               }
+            } finally {
+              form.dataset.isSubmitting = "false";
+              refreshEventRegistrationFormState(form, activeEventId);
             }
+
             return;
           }
 
@@ -1130,6 +1799,9 @@
       if (teaserChangeEventButton) {
         teaserChangeEventButton.addEventListener("click", () => {
           teaserTitle.textContent = "Select Event";
+          stopRegistrationRealtimeSync();
+          teaserModal.dataset.activeEventId = "";
+          teaserModal.dataset.activeEventTitle = "";
           setTeaserStep("selection");
         });
       }
