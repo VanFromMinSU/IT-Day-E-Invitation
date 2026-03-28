@@ -287,7 +287,7 @@ stable
 as $$
 declare
   normalized_event text := lower(btrim(coalesce(p_event_id, '')));
-  event_title text;
+  event_title_value text;
   total_count integer := 0;
   per_family jsonb := '[]'::jsonb;
   registrations jsonb := '[]'::jsonb;
@@ -304,7 +304,7 @@ begin
     );
   end if;
 
-  event_title := public.registration_event_title(normalized_event);
+  event_title_value := public.registration_event_title(normalized_event);
 
   select count(*)::int, coalesce(max(submitted_at), timezone('utc', now()))
   into total_count, updated_at
@@ -344,7 +344,7 @@ begin
       jsonb_build_object(
         'id', id::text,
         'eventId', event_id,
-        'eventTitle', event_title,
+        'eventTitle', public.event_registrations.event_title,
         'registrationType', registration_type,
         'family', family,
         'name', name,
@@ -421,7 +421,7 @@ begin
   return jsonb_build_object(
     'status', 200,
     'eventId', normalized_event,
-    'eventTitle', event_title,
+    'eventTitle', event_title_value,
     'registrations', registrations,
     'stats', stats,
     'updatedAt', updated_at,
