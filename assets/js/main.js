@@ -18,6 +18,7 @@
       const countdownChip = document.getElementById("countdown-chip");
       const responseVoterStorageKey = "itDayResponseVoterId";
       const responseChoiceStorageKey = "itDayResponseChoice";
+      const responseSyncStorageKey = "itDayResponseSyncState";
       const responseApiBaseUrl = "/api/reactions";
       const responsePollingIntervalMs = 15000;
       const responseReconnectBaseDelayMs = 1800;
@@ -25,13 +26,18 @@
       const responseRpcTimeoutMs = 12000;
       const responseHttpTimeoutMs = 12000;
       const responseUnavailableMessage = "Live response counter is unavailable. Retrying in background.";
+      const responseAlreadySubmittedMessage = "You have already submitted your response. You can only respond once on this device.";
       const eventRegistrationApiBaseUrl = "/api/event-registrations";
       const eventRegistrationPollingIntervalMs = 12000;
       const adminModeParam = "admin";
+      const adminTokenParam = "adminToken";
+      const adminResetTokenHeader = "X-Admin-Token-Hash";
       const adminResetAuthorizationKey = {};
       const appConfig = window.APP_CONFIG && typeof window.APP_CONFIG === "object" ? window.APP_CONFIG : {};
       const supabaseUrl = typeof appConfig.supabaseUrl === "string" ? appConfig.supabaseUrl.trim() : "";
       const supabaseAnonKey = typeof appConfig.supabaseAnonKey === "string" ? appConfig.supabaseAnonKey.trim() : "";
+      const configuredResponseAdminTokenHash = typeof appConfig.responseAdminTokenHash === "string" ? appConfig.responseAdminTokenHash.trim().toLowerCase() : "";
+      const responseAdminTokenHash = configuredResponseAdminTokenHash || "fb7cd66cd9802076b019b15ddf51cfbfd6ae603642a4153a5b78ae8696515bd4";
       const supabaseModule = window.supabase && typeof window.supabase.createClient === "function" ? window.supabase : null;
       const supabaseClient = supabaseModule && supabaseUrl && supabaseAnonKey
         ? supabaseModule.createClient(supabaseUrl, supabaseAnonKey, {
@@ -45,6 +51,8 @@
       const registrationEventIds = new Set(["rubiks-cube-competition", "sudoku-game-easy-level", "codm-tournament"]);
       let isAdminAuthorized = false;
       let isAdminModeRequested = false;
+      let isAdminTokenAuthorized = false;
+      let adminTokenHash = "";
       let authStateSubscription = null;
       let responseAdminActions = null;
       let resetCountsButton = null;
@@ -389,17 +397,98 @@
         responseSummary.textContent = "Interested: " + normalized.interested + " | Excited: " + normalized.excited + " | Total: " + total;
       }
 
+      function isAdminResponseBypassEnabled() {
+        return isAdminAuthorized || isAdminTokenAuthorized;
+      }
+
+      function updateResponseStatusFeedback() {
+        if (!isResponseBackendReady) {
+          return;
+        }
+
+        if (isResponseSubmissionPending) {
+          setResponseStatusNotice("Submitting your response...", false);
+          return;
+        }
+
+        if (hasSubmittedResponse) {
+          setResponseStatusNotice(responseAlreadySubmittedMessage, false);
+          return;
+        }
+
+        setResponseStatusNotice("", false);
+      }
+
+      function syncResponseStateToOtherTabs(reason) {
+        try {
+          localStorage.setItem(
+            responseSyncStorageKey,
+            JSON.stringify({
+              reason: reason || "sync",
+              responseType: submittedResponseType,
+              counts: responseCounts,
+              updatedAt: Date.now(),
+            })
+          );
+        } catch (error) {
+          // Ignore cross-tab synchronization errors.
+        }
+      }
+
+      function applySyncedResponseState(payload) {
+        if (!payload || typeof payload !== "object") {
+          return;
+        }
+
+        if (payload.counts && typeof payload.counts === "object") {
+          renderResponseCounts(payload.counts);
+        }
+
+        if (Object.prototype.hasOwnProperty.call(payload, "responseType")) {
+          const syncedResponseType = isValidResponseType(payload.responseType) ? payload.responseType : "";
+          setResponseSelection(syncedResponseType, false);
+        }
+      }
+
+      function onResponseStorageChange(event) {
+        if (!event || typeof event.key !== "string") {
+          return;
+        }
+
+        if (event.key === responseChoiceStorageKey) {
+          setResponseSelection(getStoredResponseType(), false);
+          return;
+        }
+
+        if (event.key === responseSyncStorageKey && event.newValue) {
+          try {
+            const payload = JSON.parse(event.newValue);
+            applySyncedResponseState(payload);
+          } catch (error) {
+            // Ignore malformed cross-tab synchronization payloads.
+          }
+        }
+      }
+
       function updateResponseButtonsState() {
-        const shouldDisable = hasSubmittedResponse || isResponseSubmissionPending || !isResponseBackendReady;
+        const shouldDisable = (hasSubmittedResponse && !isAdminResponseBypassEnabled()) || isResponseSubmissionPending || !isResponseBackendReady;
 
         if (interestedButton) {
           interestedButton.disabled = shouldDisable;
           interestedButton.setAttribute("aria-pressed", submittedResponseType === "interested" ? "true" : "false");
+          interestedButton.classList.toggle("is-response-selected", submittedResponseType === "interested");
+          interestedButton.classList.toggle("is-response-inactive", shouldDisable);
         }
 
         if (excitedButton) {
           excitedButton.disabled = shouldDisable;
           excitedButton.setAttribute("aria-pressed", submittedResponseType === "excited" ? "true" : "false");
+          excitedButton.classList.toggle("is-response-selected", submittedResponseType === "excited");
+          excitedButton.classList.toggle("is-response-inactive", shouldDisable);
+        }
+
+        if (isResponseBackendReady) {
+          updateResponseStatusFeedback();
         }
       }
 
@@ -516,6 +605,21 @@
         return merged;
       }
 
+      function hasAdminTokenHeader(requestHeaders) {
+        if (!requestHeaders || typeof requestHeaders !== "object") {
+          return false;
+        }
+
+        const headerKeys = Object.keys(requestHeaders);
+        for (let i = 0; i < headerKeys.length; i += 1) {
+          if (headerKeys[i].toLowerCase() === adminResetTokenHeader.toLowerCase()) {
+            return typeof requestHeaders[headerKeys[i]] === "string" && requestHeaders[headerKeys[i]].trim().length > 0;
+          }
+        }
+
+        return false;
+      }
+
       async function fetchFromHttpApi(url, options) {
         const requestOptions = options && typeof options === "object" ? options : {};
         const method = String(requestOptions.method || "GET").toUpperCase();
@@ -561,9 +665,16 @@
         }
       }
 
-      async function callBackendWithFallback(functionName, params, requestUrl, requestOptions) {
+      async function callBackendWithFallback(functionName, params, requestUrl, requestOptions, options) {
+        const config = options && typeof options === "object" ? options : {};
+        const allowForbiddenFallback = Boolean(config.allowForbiddenFallback);
         const rpcResult = await callBackendRpc(functionName, params || {});
-        if (rpcResult.ok || rpcResult.status === 400 || rpcResult.status === 403 || rpcResult.status === 409) {
+        if (
+          rpcResult.ok ||
+          rpcResult.status === 400 ||
+          rpcResult.status === 409 ||
+          (rpcResult.status === 403 && !allowForbiddenFallback)
+        ) {
           return rpcResult;
         }
 
@@ -576,7 +687,7 @@
           return rpcResult;
         }
 
-        if (rpcResult.status >= 500) {
+        if (rpcResult.status >= 500 && !fallbackResult.ok) {
           return rpcResult;
         }
 
@@ -658,7 +769,9 @@
         }
 
         if (requestUrl.pathname === responseApiBaseUrl + "/reset" && method === "POST") {
-          return callBackendWithFallback("reset_reactions", {}, requestUrl, requestOptions);
+          return callBackendWithFallback("reset_reactions", {}, requestUrl, requestOptions, {
+            allowForbiddenFallback: hasAdminTokenHeader(requestOptions.headers),
+          });
         }
 
         if (requestUrl.pathname === eventRegistrationApiBaseUrl && method === "GET") {
@@ -837,7 +950,7 @@
       }
 
       function ensureAdminResetControls() {
-        if (!responseSummary || responseAdminActions || (!isAdminAuthorized && !isAdminModeRequested)) {
+        if (!responseSummary || responseAdminActions || (!isAdminAuthorized && !isAdminModeRequested && !isAdminTokenAuthorized)) {
           return;
         }
 
@@ -911,14 +1024,34 @@
 
       async function initializeAdminAccess() {
         isAdminModeRequested = false;
+        isAdminTokenAuthorized = false;
+        adminTokenHash = "";
         removeAdminResetControls();
 
         const params = new URLSearchParams(window.location.search);
         const adminModeValue = (params.get(adminModeParam) || "").toLowerCase();
+        const adminTokenValue = (params.get(adminTokenParam) || "").trim();
+        const hadAdminModeParam = params.has(adminModeParam);
+        const hadAdminTokenParam = params.has(adminTokenParam);
         isAdminModeRequested = adminModeValue === "1" || adminModeValue === "true";
 
-        if (params.has(adminModeParam)) {
+        if (adminTokenValue) {
+          const tokenHash = await hashStringSha256(adminTokenValue);
+          if (tokenHash && tokenHash === responseAdminTokenHash) {
+            isAdminTokenAuthorized = true;
+            adminTokenHash = tokenHash;
+          }
+        }
+
+        if (hadAdminModeParam) {
           params.delete(adminModeParam);
+        }
+
+        if (hadAdminTokenParam) {
+          params.delete(adminTokenParam);
+        }
+
+        if (hadAdminModeParam || hadAdminTokenParam) {
           const nextQuery = params.toString();
           const nextUrl = window.location.pathname + (nextQuery ? "?" + nextQuery : "") + window.location.hash;
           window.history.replaceState({}, document.title, nextUrl);
@@ -929,7 +1062,7 @@
         if (supabaseClient && !authStateSubscription) {
           const authListener = supabaseClient.auth.onAuthStateChange(() => {
             refreshAdminAuthorization().then(() => {
-              if (isAdminAuthorized || isAdminModeRequested) {
+              if (isAdminAuthorized || isAdminModeRequested || isAdminTokenAuthorized) {
                 ensureAdminResetControls();
               } else {
                 removeAdminResetControls();
@@ -940,8 +1073,30 @@
           authStateSubscription = authListener && authListener.data ? authListener.data.subscription : null;
         }
 
-        if (isAdminAuthorized || isAdminModeRequested) {
+        if (isAdminAuthorized || isAdminModeRequested || isAdminTokenAuthorized) {
           ensureAdminResetControls();
+        }
+      }
+
+      async function hashStringSha256(value) {
+        if (!value || !window.crypto || !window.crypto.subtle || typeof TextEncoder !== "function") {
+          return "";
+        }
+
+        try {
+          const encoded = new TextEncoder().encode(value);
+          const digest = await window.crypto.subtle.digest("SHA-256", encoded);
+          const hashBytes = new Uint8Array(digest);
+          let hashHex = "";
+
+          for (let i = 0; i < hashBytes.length; i += 1) {
+            hashHex += hashBytes[i].toString(16).padStart(2, "0");
+          }
+
+          return hashHex;
+        } catch (error) {
+          console.error("[admin] Unable to hash admin token.", error);
+          return "";
         }
       }
 
@@ -957,8 +1112,9 @@
           return;
         }
 
-        if (hasSubmittedResponse) {
-          showToast("You already submitted a response on this browser.");
+        if (hasSubmittedResponse && !isAdminResponseBypassEnabled()) {
+          setResponseStatusNotice(responseAlreadySubmittedMessage, false);
+          showToast("You have already submitted your response.");
           return;
         }
 
@@ -978,7 +1134,7 @@
 
         optimisticCounts[responseType] += 1;
         isResponseSubmissionPending = true;
-        setResponseSelection(responseType, true);
+        setResponseSelection(responseType, false);
         renderResponseCounts(optimisticCounts);
 
         try {
@@ -991,7 +1147,8 @@
             renderResponseCounts(getResponseStatePayload(result.payload));
             const existingType = result.payload && isValidResponseType(result.payload.responseType) ? result.payload.responseType : getStoredResponseType();
             setResponseSelection(existingType, true);
-            showToast("You already submitted a response on this browser.");
+            syncResponseStateToOtherTabs("already-submitted");
+            showToast("You have already submitted your response.");
             return;
           }
 
@@ -1005,13 +1162,14 @@
           setResponseBackendReady(true, { showNotice: false });
           const acceptedType = result.payload && isValidResponseType(result.payload.responseType) ? result.payload.responseType : responseType;
           setResponseSelection(acceptedType, true);
+          syncResponseStateToOtherTabs("vote");
 
           const total = responseCounts.interested + responseCounts.excited;
           showToast("Thanks for your response. Total reactions: " + total + ".");
         } catch (error) {
           console.error("[responses] Could not submit vote.", error);
           renderResponseCounts(previousCounts);
-          setResponseSelection(previousSelection, true);
+          setResponseSelection(previousSelection, false);
 
           const failedResult = error && error.result ? error.result : null;
           if (failedResult && failedResult.status >= 500) {
@@ -1043,28 +1201,44 @@
       }
 
       async function resetResponseCounts(authorizationKey) {
-        if (!isAdminAuthorized || authorizationKey !== adminResetAuthorizationKey) {
+        const hasTokenAdminAccess = isAdminTokenAuthorized && Boolean(adminTokenHash);
+
+        if ((!isAdminAuthorized && !hasTokenAdminAccess) || authorizationKey !== adminResetAuthorizationKey) {
           showToast("Admin access required.");
           return;
         }
 
+        const requestHeaders = {};
+        if (hasTokenAdminAccess) {
+          requestHeaders[adminResetTokenHeader] = adminTokenHash;
+        }
+
         const result = await fetchJson(responseApiBaseUrl + "/reset", {
           method: "POST",
+          headers: requestHeaders,
           body: JSON.stringify({}),
         });
 
         if (!result.ok) {
+          if (result.status === 403) {
+            showToast("Admin access required.");
+            return;
+          }
+
           showToast("Unable to reset counts right now.");
           return;
         }
 
         renderResponseCounts(getResponseStatePayload(result.payload));
         setResponseSelection("", true);
+        syncResponseStateToOtherTabs("reset");
         showToast("Response counts reset.");
       }
 
       async function onAdminResetClick() {
-        if (!isAdminAuthorized) {
+        const hasTokenAdminAccess = isAdminTokenAuthorized && Boolean(adminTokenHash);
+
+        if (!isAdminAuthorized && !hasTokenAdminAccess) {
           const signedIn = await promptAdminSignIn();
           if (!signedIn) {
             showToast("Admin authentication required.");
@@ -1834,6 +2008,7 @@
 
       initializeAdminAccess();
       initializeResponseCounters();
+      window.addEventListener("storage", onResponseStorageChange);
 
       if (interestedButton) {
         interestedButton.addEventListener("click", () => {
@@ -1849,6 +2024,7 @@
 
       window.addEventListener("beforeunload", () => {
         clearResponseReconnectTimer();
+        window.removeEventListener("storage", onResponseStorageChange);
 
         if (responsePollIntervalId) {
           clearInterval(responsePollIntervalId);

@@ -820,6 +820,24 @@
       margin-top: 0.2rem;
     }
 
+    .response-actions .btn.is-response-selected {
+      border-color: rgba(133, 255, 159, 0.76);
+      box-shadow: 0 0 0 1px rgba(133, 255, 159, 0.34);
+    }
+
+    .response-actions .btn.is-response-inactive,
+    .response-actions .btn:disabled {
+      opacity: 0.56;
+      cursor: not-allowed;
+      filter: saturate(0.62);
+      box-shadow: none;
+      transform: none;
+    }
+
+    .response-actions .btn.is-response-selected:disabled {
+      border-color: rgba(133, 255, 159, 0.42);
+    }
+
     .response-summary {
       margin-top: 0.8rem;
       margin-bottom: 0.8rem;

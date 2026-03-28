@@ -46,12 +46,18 @@ Setup steps:
 2. Set app metadata for that user to include role=admin.
 3. Open the site with admin mode enabled:
    - ?admin=true
+   - or use owner token mode: ?adminToken=ITDAY_OWNER_RESET_2026
 4. Click Reset Counts and sign in when prompted.
+
+Optional token hash override:
+
+- You can set `responseAdminTokenHash` in `assets/js/config.js` to override the default expected SHA-256 hash for `adminToken`.
 
 Notes:
 
 - Regular users can read and submit reactions/registrations.
-- Only authenticated admin users can reset reaction counts.
+- Reset counts requires either an authenticated admin user or a valid owner token.
+- Token mode can reset counts through the same-origin `/api/reactions/reset` fallback endpoint when configured.
 
 ## Deployment (Always Online)
 
