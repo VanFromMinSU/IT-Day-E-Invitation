@@ -237,6 +237,47 @@
         }, 2600);
       }
 
+      function triggerTapFeedback(target) {
+        if (prefersReducedMotion || !(target instanceof HTMLElement)) {
+          return;
+        }
+
+        target.classList.remove("is-tapped");
+        // Force reflow so repeated taps replay the animation reliably.
+        void target.offsetWidth;
+        target.classList.add("is-tapped");
+
+        window.setTimeout(() => {
+          target.classList.remove("is-tapped");
+        }, 210);
+      }
+
+      function setButtonPendingState(button, isPending, pendingLabel) {
+        if (!(button instanceof HTMLButtonElement)) {
+          return;
+        }
+
+        if (isPending) {
+          if (!button.dataset.defaultLabel) {
+            button.dataset.defaultLabel = button.textContent || "";
+          }
+
+          button.classList.add("is-pending");
+          button.setAttribute("aria-busy", "true");
+          if (pendingLabel) {
+            button.textContent = pendingLabel;
+          }
+          return;
+        }
+
+        button.classList.remove("is-pending");
+        button.setAttribute("aria-busy", "false");
+        if (button.dataset.defaultLabel) {
+          button.textContent = button.dataset.defaultLabel;
+          delete button.dataset.defaultLabel;
+        }
+      }
+
       function ensureResponseStatusNotice() {
         if (responseStatusNotice || !responseSummary) {
           return responseStatusNotice;
@@ -740,16 +781,20 @@
 
         if (interestedButton) {
           interestedButton.disabled = shouldDisable;
+          interestedButton.setAttribute("aria-busy", isResponseSubmissionPending ? "true" : "false");
           interestedButton.setAttribute("aria-pressed", submittedResponseType === "interested" ? "true" : "false");
           interestedButton.classList.toggle("is-response-selected", submittedResponseType === "interested");
           interestedButton.classList.toggle("is-response-inactive", shouldDisable);
+          interestedButton.classList.toggle("is-pending", isResponseSubmissionPending);
         }
 
         if (excitedButton) {
           excitedButton.disabled = shouldDisable;
+          excitedButton.setAttribute("aria-busy", isResponseSubmissionPending ? "true" : "false");
           excitedButton.setAttribute("aria-pressed", submittedResponseType === "excited" ? "true" : "false");
           excitedButton.classList.toggle("is-response-selected", submittedResponseType === "excited");
           excitedButton.classList.toggle("is-response-inactive", shouldDisable);
+          excitedButton.classList.toggle("is-pending", isResponseSubmissionPending);
         }
 
         if (isResponseBackendReady) {
@@ -1362,6 +1407,7 @@
           resetCountsButton.addEventListener("click", onAdminResetClick);
           resetCountsButton.disabled = isResetRequestPending;
           resetCountsButton.setAttribute("aria-busy", isResetRequestPending ? "true" : "false");
+          resetCountsButton.classList.toggle("is-pending", isResetRequestPending);
 
           responseAdminActions.appendChild(resetCountsButton);
           responseSummary.insertAdjacentElement("afterend", responseAdminActions);
@@ -1376,6 +1422,7 @@
           resetRegistrationsButton.addEventListener("click", onAdminResetRegistrationsClick);
           resetRegistrationsButton.disabled = isRegistrationResetPending;
           resetRegistrationsButton.setAttribute("aria-busy", isRegistrationResetPending ? "true" : "false");
+          resetRegistrationsButton.classList.toggle("is-pending", isRegistrationResetPending);
           responseAdminActions.appendChild(resetRegistrationsButton);
         }
 
@@ -1641,6 +1688,7 @@
 
         resetCountsButton.disabled = isResetRequestPending;
         resetCountsButton.setAttribute("aria-busy", isResetRequestPending ? "true" : "false");
+        resetCountsButton.classList.toggle("is-pending", isResetRequestPending);
       }
 
       function setResetRegistrationsButtonPendingState(isPending) {
@@ -1652,6 +1700,7 @@
 
         resetRegistrationsButton.disabled = isRegistrationResetPending;
         resetRegistrationsButton.setAttribute("aria-busy", isRegistrationResetPending ? "true" : "false");
+        resetRegistrationsButton.classList.toggle("is-pending", isRegistrationResetPending);
       }
 
       async function resetResponseCounts(authorizationKey) {
@@ -2282,7 +2331,9 @@
           }
 
           return (
-            '<button type="button" class="btn btn-secondary event-inline-button" data-cancel-registration="true" data-registration-id="' +
+            '<button type="button" class="btn btn-secondary event-inline-button' +
+            (isPendingCancellation ? " is-pending" : "") +
+            '" data-cancel-registration="true" data-registration-id="' +
             escapeHtml(registrationId) +
             '" data-event-id="' +
             escapeHtml(registrationEventId || fallbackEventId) +
@@ -2405,10 +2456,16 @@
       }
 
       function setFormControlsDisabled(form, disabled) {
-        const controls = form.querySelectorAll("input, select, button[type='submit'], button[data-add-member='true'], button[data-remove-member='true']");
+        const controls = form.querySelectorAll("input, select, button[type='submit'], button[data-add-member='true'], button[data-remove-member='true'], button[data-cancel-registration='true']");
         controls.forEach((control) => {
           control.disabled = disabled;
         });
+      }
+
+      function setFormSubmittingState(form, isSubmitting) {
+        const submitButton = form.querySelector('button[type="submit"]');
+        setButtonPendingState(submitButton, isSubmitting, "Submitting...");
+        setFormControlsDisabled(form, isSubmitting);
       }
 
       function updateTeamSubmitAvailability(form, state) {
@@ -3012,6 +3069,7 @@
             }
 
             form.dataset.isSubmitting = "true";
+            setFormSubmittingState(form, true);
 
             try {
               const ownerToken = getOrCreateRegistrationOwnerToken();
@@ -3049,11 +3107,12 @@
                 rememberOwnedRegistration(result.payload.registration);
               }
 
-              setEventFormFeedback(form, "You are successfully registered.", false);
-              showToast("You are successfully registered.");
+              setEventFormFeedback(form, "Registration submitted!", false);
+              showToast("Registration submitted!");
               form.reset();
             } finally {
               form.dataset.isSubmitting = "false";
+              setFormSubmittingState(form, false);
               refreshEventRegistrationFormState(form, activeEventId);
             }
 
@@ -3082,6 +3141,7 @@
             }
 
             form.dataset.isSubmitting = "true";
+            setFormSubmittingState(form, true);
 
             try {
               const ownerToken = getOrCreateRegistrationOwnerToken();
@@ -3124,8 +3184,8 @@
                 rememberOwnedRegistration(result.payload.registration);
               }
 
-              setEventFormFeedback(form, "You are successfully registered.", false);
-              showToast(teamLabel ? "You are successfully registered. " + teamLabel + " is confirmed." : "You are successfully registered.");
+              setEventFormFeedback(form, "Registration submitted!", false);
+              showToast(teamLabel ? "Registration submitted! " + teamLabel + " is confirmed." : "Registration submitted!");
               form.reset();
               const membersList = form.querySelector(".event-members-list");
               if (membersList) {
@@ -3133,6 +3193,7 @@
               }
             } finally {
               form.dataset.isSubmitting = "false";
+              setFormSubmittingState(form, false);
               refreshEventRegistrationFormState(form, activeEventId);
             }
 
@@ -3152,6 +3213,18 @@
           setTeaserStep("selection");
         });
       }
+
+      document.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) {
+          return;
+        }
+
+        const feedbackTarget = target.closest(".btn, .event-selection-option, .event-member-remove, .registration-close, .interactive-event, nav a, .socials a, .brand");
+        if (feedbackTarget instanceof HTMLElement) {
+          triggerTapFeedback(feedbackTarget);
+        }
+      });
 
       const teaserTargets = document.querySelectorAll(".interactive-event[data-teaser-title]");
       teaserTargets.forEach((target) => {

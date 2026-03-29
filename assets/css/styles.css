@@ -376,6 +376,25 @@
       transform: translateY(0) scale(0.985);
     }
 
+    .btn:disabled,
+    .event-selection-option:disabled,
+    .event-member-remove:disabled,
+    .registration-close:disabled {
+      cursor: not-allowed;
+    }
+
+    .btn.is-pending,
+    .event-selection-option.is-pending,
+    .event-member-remove.is-pending,
+    .registration-close.is-pending,
+    .btn[aria-busy="true"],
+    .event-selection-option[aria-busy="true"],
+    .event-member-remove[aria-busy="true"],
+    .registration-close[aria-busy="true"] {
+      filter: saturate(0.8);
+      opacity: 0.84;
+    }
+
     .scroll-indicator {
       position: absolute;
       left: 50%;
@@ -803,13 +822,15 @@
       padding: 0.32rem 0.75rem;
       cursor: pointer;
       font: inherit;
-      transition: border-color var(--transition-fast), background var(--transition-fast);
+      transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
     }
 
     .registration-close:hover,
     .registration-close:focus-visible {
       border-color: rgba(64, 240, 255, 0.6);
       background: rgba(64, 240, 255, 0.12);
+      transform: translateY(-1px);
+      box-shadow: 0 8px 16px rgba(2, 8, 7, 0.2);
       outline: none;
     }
 
@@ -820,9 +841,51 @@
       margin-top: 0.2rem;
     }
 
+    .response-actions,
+    .event-form-actions,
+    .event-selection-list {
+      border: 1px solid rgba(133, 255, 159, 0.12);
+      border-radius: 12px;
+      background: rgba(8, 18, 16, 0.34);
+      padding: 0.38rem;
+    }
+
+    .response-actions #excited-button {
+      border-color: rgba(255, 225, 106, 0.68);
+      box-shadow: 0 10px 26px rgba(240, 219, 114, 0.3), 0 0 0 1px rgba(255, 225, 106, 0.2);
+    }
+
+    .response-actions #excited-button:hover,
+    .response-actions #excited-button:focus-visible {
+      box-shadow: 0 16px 34px rgba(240, 219, 114, 0.38), 0 0 0 2px rgba(255, 225, 106, 0.3);
+    }
+
+    .response-actions #interested-button {
+      color: var(--text-200);
+      border-color: rgba(133, 255, 159, 0.32);
+      background: rgba(14, 29, 26, 0.72);
+      box-shadow: 0 6px 14px rgba(6, 16, 14, 0.28);
+    }
+
+    .response-actions #interested-button:hover,
+    .response-actions #interested-button:focus-visible {
+      border-color: rgba(133, 255, 159, 0.5);
+      box-shadow: 0 10px 20px rgba(11, 23, 20, 0.32);
+    }
+
     .response-actions .btn.is-response-selected {
       border-color: rgba(133, 255, 159, 0.76);
       box-shadow: 0 0 0 1px rgba(133, 255, 159, 0.34);
+    }
+
+    .response-actions #excited-button.is-response-selected {
+      border-color: rgba(255, 225, 106, 0.82);
+      box-shadow: 0 0 0 1px rgba(255, 225, 106, 0.44), 0 14px 28px rgba(240, 219, 114, 0.34);
+    }
+
+    .response-actions #interested-button.is-response-selected {
+      border-color: rgba(133, 255, 159, 0.58);
+      box-shadow: 0 0 0 1px rgba(133, 255, 159, 0.28);
     }
 
     .response-actions .btn.is-response-inactive,
@@ -981,7 +1044,7 @@
       border-radius: 11px;
       padding: 0.62rem 0.7rem;
       cursor: pointer;
-      transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
+      transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
     }
 
     .event-selection-option:hover,
@@ -989,6 +1052,7 @@
       border-color: rgba(64, 240, 255, 0.56);
       background: rgba(64, 240, 255, 0.08);
       transform: translateY(-1px);
+      box-shadow: 0 10px 18px rgba(2, 8, 7, 0.24), 0 0 14px rgba(64, 240, 255, 0.1);
       outline: none;
     }
 
@@ -1053,6 +1117,10 @@
 
     .event-registration-wrap {
       margin-top: 0.2rem;
+      border: 1px solid rgba(133, 255, 159, 0.13);
+      border-radius: 12px;
+      background: rgba(8, 18, 16, 0.32);
+      padding: 0.45rem;
     }
 
     .event-registration-soon {
@@ -1145,13 +1213,15 @@
       cursor: pointer;
       font: inherit;
       font-size: 0.78rem;
-      transition: border-color var(--transition-fast), background var(--transition-fast);
+      transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
     }
 
     .event-member-remove:hover,
     .event-member-remove:focus-visible {
       border-color: rgba(64, 240, 255, 0.55);
       background: rgba(64, 240, 255, 0.1);
+      transform: translateY(-1px);
+      box-shadow: 0 8px 16px rgba(2, 8, 7, 0.2);
       outline: none;
     }
 
@@ -1299,6 +1369,10 @@
       margin-top: 0.15rem;
     }
 
+    .event-form-actions .btn {
+      width: 100%;
+    }
+
     .app-toast {
       position: fixed;
       right: 1rem;
@@ -1409,6 +1483,35 @@
     :where(nav a, .socials a):focus-visible::after {
       opacity: 0.9;
       transform: scaleX(1);
+    }
+
+    :where(nav a, .socials a):hover,
+    :where(nav a, .socials a):focus-visible {
+      text-decoration: underline;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 0.2em;
+    }
+
+    a:not(.btn):not(.skip-link):hover,
+    a:not(.btn):not(.skip-link):focus-visible {
+      text-decoration-thickness: 1px;
+      text-underline-offset: 0.2em;
+    }
+
+    .is-tapped {
+      animation: tapPulse 200ms ease-out;
+    }
+
+    @keyframes tapPulse {
+      0% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(0.98);
+      }
+      100% {
+        transform: scale(1);
+      }
     }
 
     @keyframes pulseGlow {
@@ -1577,6 +1680,15 @@
       .interactive-event::before {
         opacity: 0.86;
         transform: scale(1);
+      }
+
+      :where(.btn, .event-selection-option, .event-member-remove, .registration-close, .interactive-event):active {
+        transform: scale(0.985);
+        filter: brightness(1.06);
+      }
+
+      :where(nav a, .socials a):active {
+        background: rgba(64, 240, 255, 0.1);
       }
     }
 
