@@ -18,6 +18,7 @@ const REGISTRATION_EVENT_IDS = new Set([
   "rubiks-cube-competition",
   "sudoku-game-easy-level",
   "codm-tournament",
+  "mobile-legends-tournament",
   "fast-typing",
   "crimping-competition",
   "assembling-and-disassembling-competition",
@@ -29,7 +30,7 @@ const INDIVIDUAL_EVENT_IDS = new Set([
   "crimping-competition",
   "assembling-and-disassembling-competition",
 ]);
-const TEAM_EVENT_IDS = new Set(["codm-tournament"]);
+const TEAM_EVENT_IDS = new Set(["codm-tournament", "mobile-legends-tournament"]);
 const FAMILY_OPTIONS = ["Family 1 - Claude", "Family 2 - Grok", "Family 3 - Gemini", "Family 4 - Dola"];
 const FAMILY_TEAM_PREFIX = {
   "Family 1 - Claude": "A",
@@ -45,6 +46,7 @@ const EVENT_TITLE_MAP = {
   "rubiks-cube-competition": "Rubik's Cube Competition",
   "sudoku-game-easy-level": "Sudoku Game (Easy Level)",
   "codm-tournament": "Call of Duty: Mobile (CODM) Tournament",
+  "mobile-legends-tournament": "Mobile Legends Tournament",
   "fast-typing": "Fast Typing Competition",
   "crimping-competition": "Crimping Competition",
   "assembling-and-disassembling-competition": "Assembling and Disassembling Competition",
@@ -72,6 +74,14 @@ function getIndividualRegistrationConfig(eventId) {
 }
 
 function getTeamRegistrationConfig(eventId) {
+  if (eventId === "mobile-legends-tournament") {
+    return {
+      requiresExactMembers: true,
+      maxMembers: 4,
+      maxTotalParticipants: 5,
+    };
+  }
+
   return {
     requiresExactMembers: true,
     maxMembers: 3,
@@ -338,6 +348,10 @@ function getRegistrationClosedMessage(eventId) {
 }
 
 function getTeamSizeMessage(eventId) {
+  if (eventId === "mobile-legends-tournament") {
+    return "Each team must have exactly 5 members including the Team Captain / Leader.";
+  }
+
   return "Each team must have exactly 4 members including the Team Captain/Leader.";
 }
 

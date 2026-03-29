@@ -63,7 +63,7 @@
           },
         })
         : null;
-      const registrationEventIds = new Set(["rubiks-cube-competition", "sudoku-game-easy-level", "codm-tournament", "fast-typing", "crimping-competition", "assembling-and-disassembling-competition"]);
+      const registrationEventIds = new Set(["rubiks-cube-competition", "sudoku-game-easy-level", "codm-tournament", "mobile-legends-tournament", "fast-typing", "crimping-competition", "assembling-and-disassembling-competition"]);
       let isAdminAuthorized = false;
       let isAdminModeRequested = false;
       let isAdminTokenAuthorized = false;
@@ -267,6 +267,32 @@
             '<li>Auto-typers/macros/scripts result in disqualification.</li>' +
             '<li>Using pre-written passages results in disqualification.</li>' +
             '</ol>',
+        },
+        "mobile-legends-tournament": {
+          eventId: "mobile-legends-tournament",
+          title: "Mobile Legends Tournament",
+          venue: "Auditorium",
+          registrationType: "team",
+          mechanicsHtml:
+            '<h5>IT Day Mobile Legends Tournament</h5>' +
+            '<h5>1. Tournament Format</h5>' +
+            '<p>The semi-finals will follow a Single Elimination format.</p>' +
+            '<p>Each match in the semi-finals will follow a Best of 5 structure.</p>' +
+            '<p>The winners of the semi-final matches will advance to the finals.</p>' +
+            '<h5>2. Match Schedule</h5>' +
+            '<p>The semi-final match schedule will be determined and shared with the teams prior to the tournament. Teams must adhere to the provided schedule.</p>' +
+            '<p>Failure to appear within 15 minutes of the scheduled match will result in forfeit, advancing the opponent team to the next stage.</p>' +
+            '<h5>3. Team Composition</h5>' +
+            '<p>Players must continue to use their pre-registered in-game names (IGNs) for the semi-finals.</p>' +
+            '<p>No substitutions or player swaps will be allowed during this stage of the tournament.</p>' +
+            '<h5>4. Rules and Gameplay</h5>' +
+            '<p>All matches will be played in Custom Lobby Mode with standard Draft Pick settings.</p>' +
+            '<p>Winning teams of each match will advance to the finals.</p>' +
+            '<h5>5. Match Procedures and Technical Rules</h5>' +
+            '<p>Teams must arrive 15 minutes before their scheduled semi-final match.</p>' +
+            '<p>All players must use their pre-registered IGNs during gameplay.</p>' +
+            '<h5>Technical Rules</h5>' +
+            '<p>The tournament organizer holds no accountability for loss of power, internet connection issues, or personal technical problems experienced during the match. Players are strongly advised to ensure stable power and internet connections before the game.</p>',
         },
         "rubiks-cube-competition": {
           eventId: "rubiks-cube-competition",
@@ -2229,7 +2255,7 @@
       }
 
       function getRegistrationClosedValidationMessage(eventId) {
-        if (eventId === "codm-tournament") {
+        if (eventId === "codm-tournament" || eventId === "mobile-legends-tournament") {
           return "Registration is now closed. Maximum teams reached.";
         }
 
@@ -2253,6 +2279,24 @@
       }
 
       function getTeamRegistrationRules(eventId) {
+        if (eventId === "mobile-legends-tournament") {
+          return {
+            maxMembers: 4,
+            defaultMemberRows: 4,
+            requireCompleteMemberFields: true,
+            requiresExactMembers: true,
+            exactMembers: 4,
+            maxTotalParticipants: 5,
+            sizeMessage: "Each team must have exactly 5 members including the Team Captain / Leader.",
+            familyLabel: "Family Name",
+            captainLabel: "Team Captain / Leader",
+            membersHeading: "Team Members",
+            memberLabels: ["Member 1", "Member 2", "Member 3", "Member 4"],
+            fixedMemberFields: true,
+            allowMemberControls: false,
+          };
+        }
+
         return {
           maxMembers: 3,
           defaultMemberRows: 3,
@@ -2261,6 +2305,12 @@
           exactMembers: 3,
           maxTotalParticipants: 4,
           sizeMessage: "Each team must have exactly 4 members including the Team Captain/Leader.",
+          familyLabel: "Family",
+          captainLabel: "Team Captain",
+          membersHeading: "Members",
+          memberLabels: [],
+          fixedMemberFields: false,
+          allowMemberControls: true,
         };
       }
 
@@ -2648,6 +2698,19 @@
           return;
         }
 
+        const familySelect = form.elements.namedItem("family");
+        if (!(familySelect instanceof HTMLSelectElement) || !familySelect.value) {
+          submitButton.disabled = true;
+          return;
+        }
+
+        const familyEntries = stats && Array.isArray(stats.perFamily) ? stats.perFamily : [];
+        const familyEntry = familyEntries.find((entry) => entry.family === familySelect.value);
+        if (familyEntry && familyEntry.count >= familyEntry.limit) {
+          submitButton.disabled = true;
+          return;
+        }
+
         const teamRules = getTeamRegistrationRules(eventId);
         const teamState = getCurrentTeamMemberState(form);
         const hasEmptyMemberSlot = teamState.members.some((member) => member.length === 0);
@@ -2908,13 +2971,19 @@
           .join("");
       }
 
-      function buildTeamMemberRowMarkup(isRequired) {
+      function buildTeamMemberRowMarkup(isRequired, placeholder, showRemoveButton, label) {
         const requiredAttribute = isRequired ? " required" : "";
+        const resolvedPlaceholder = placeholder || "Member name";
+        const memberLabelMarkup = label ? '<label>' + escapeHtml(label) + '</label>' : "";
+        const removeButtonMarkup = showRemoveButton
+          ? '<button type="button" class="event-member-remove" data-remove-member="true" aria-label="Remove member">Remove</button>'
+          : "";
 
         return (
           '<div class="event-member-row">' +
-          '<input name="members[]" type="text" placeholder="Member name"' + requiredAttribute + ' />' +
-          '<button type="button" class="event-member-remove" data-remove-member="true" aria-label="Remove member">Remove</button>' +
+          memberLabelMarkup +
+          '<input name="members[]" type="text" placeholder="' + escapeHtml(resolvedPlaceholder) + '"' + requiredAttribute + ' />' +
+          removeButtonMarkup +
           "</div>"
         );
       }
@@ -2923,7 +2992,19 @@
         let markup = "";
 
         for (let i = 0; i < count; i += 1) {
-          markup += buildTeamMemberRowMarkup(isRequired);
+          markup += buildTeamMemberRowMarkup(isRequired, "Member name", true, "");
+        }
+
+        return markup;
+      }
+
+      function buildFixedTeamMemberRowsMarkup(memberLabels, isRequired) {
+        let markup = "";
+        const labels = Array.isArray(memberLabels) ? memberLabels : [];
+
+        for (let i = 0; i < labels.length; i += 1) {
+          const memberLabel = labels[i];
+          markup += buildTeamMemberRowMarkup(isRequired, memberLabel, false, memberLabel + ":");
         }
 
         return markup;
@@ -2965,28 +3046,36 @@
         }
 
         const teamRules = getTeamRegistrationRules(details.eventId);
-        const membersHeading = "Members";
+        const familyLabel = teamRules.familyLabel || "Family";
+        const captainLabel = teamRules.captainLabel || "Team Captain";
+        const membersHeading = teamRules.membersHeading || "Members";
+        const membersListMarkup = teamRules.fixedMemberFields
+          ? buildFixedTeamMemberRowsMarkup(teamRules.memberLabels, teamRules.requireCompleteMemberFields)
+          : buildTeamMemberRowsMarkup(teamRules.defaultMemberRows, teamRules.requireCompleteMemberFields);
+        const addMemberButtonMarkup = teamRules.allowMemberControls
+          ? '<button type="button" class="btn btn-secondary event-inline-button" data-add-member="true">Add Member</button>'
+          : "";
 
         teaserRegistration.innerHTML =
           '<form class="event-registration-form" data-registration-type="team" novalidate>' +
           '<div class="event-form-grid">' +
           '<div class="event-form-field">' +
-          '<label for="event-family">Family</label>' +
+          '<label for="event-family">' + escapeHtml(familyLabel) + '</label>' +
           '<select id="event-family" name="family" required><option value="">Select family</option>' +
           buildFamilyOptionsMarkup() +
           "</select>" +
           "</div>" +
           '<div class="event-form-field">' +
-          '<label for="event-captain">Team Captain</label>' +
+          '<label for="event-captain">' + escapeHtml(captainLabel) + '</label>' +
           '<input id="event-captain" name="captain" type="text" autocomplete="name" placeholder="Enter team captain" required />' +
           "</div>" +
           "</div>" +
           '<div class="event-members-wrap">' +
           '<div class="event-members-header">' +
           "<strong>" + escapeHtml(membersHeading) + "</strong>" +
-          '<button type="button" class="btn btn-secondary event-inline-button" data-add-member="true">Add Member</button>' +
+          addMemberButtonMarkup +
           "</div>" +
-          '<div class="event-members-list">' + buildTeamMemberRowsMarkup(teamRules.defaultMemberRows, teamRules.requireCompleteMemberFields) + "</div>" +
+          '<div class="event-members-list">' + membersListMarkup + "</div>" +
           "</div>" +
           '<div class="event-registration-status" data-registration-status="true" aria-live="polite"></div>' +
           '<div class="event-registered-participants" data-registered-participants="true" aria-live="polite"></div>' +
@@ -3007,12 +3096,14 @@
         membersList.appendChild(memberRow);
       }
 
-      function resetTeamMembers(membersList, count, isRequired) {
-        membersList.innerHTML = "";
-
-        for (let i = 0; i < count; i += 1) {
-          addTeamMemberRow(membersList, isRequired);
+      function resetTeamMembers(membersList, teamRules) {
+        if (!membersList || !teamRules) {
+          return;
         }
+
+        membersList.innerHTML = teamRules.fixedMemberFields
+          ? buildFixedTeamMemberRowsMarkup(teamRules.memberLabels, teamRules.requireCompleteMemberFields)
+          : buildTeamMemberRowsMarkup(teamRules.defaultMemberRows, teamRules.requireCompleteMemberFields);
       }
 
       function setEventFormFeedback(form, message, isError) {
@@ -3388,12 +3479,17 @@
                 rememberOwnedRegistration(result.payload.registration);
               }
 
-              setEventFormFeedback(form, "Registration submitted!", false);
-              showToast(teamLabel ? "Registration submitted! " + teamLabel + " is confirmed." : "Registration submitted!");
+              const successMessage = activeEventId === "mobile-legends-tournament"
+                ? "Team registered successfully."
+                : "Registration submitted!";
+              setEventFormFeedback(form, successMessage, false);
+              showToast(activeEventId === "mobile-legends-tournament"
+                ? successMessage
+                : (teamLabel ? "Registration submitted! " + teamLabel + " is confirmed." : "Registration submitted!"));
               form.reset();
               const membersList = form.querySelector(".event-members-list");
               if (membersList) {
-                resetTeamMembers(membersList, teamRules.defaultMemberRows, teamRules.requireCompleteMemberFields);
+                resetTeamMembers(membersList, teamRules);
               }
             } finally {
               form.dataset.isSubmitting = "false";
