@@ -21,6 +21,7 @@ No local Express server is required in production.
    - supabase/migrations/20260328_realtime_backend.sql
    - supabase/migrations/20260328_admin_token_reset_support.sql
    - supabase/migrations/20260329_admin_reset_all_registrations.sql
+   - supabase/migrations/20260329_fix_registration_reset_delete_where_clause.sql
    - supabase/migrations/20260329_registration_owner_cancel_support.sql
    - supabase/migrations/20260329_owner_token_hash_no_digest_patch.sql
 3. In Database -> Replication, ensure Realtime is enabled for:

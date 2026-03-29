@@ -83,9 +83,3 @@ begin
   );
 end;
 $$;
-
-revoke all on function public.reset_all_registrations() from public;
-revoke all on function public.reset_all_registrations_with_token(text) from public;
-
-grant execute on function public.reset_all_registrations() to authenticated;
-grant execute on function public.reset_all_registrations_with_token(text) to anon, authenticated;
