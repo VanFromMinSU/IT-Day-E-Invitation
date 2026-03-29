@@ -16,10 +16,15 @@
       const teaserRegistration = document.getElementById("teaser-registration");
       const appToast = document.getElementById("app-toast");
       const countdownChip = document.getElementById("countdown-chip");
+      const appConfig = window.APP_CONFIG && typeof window.APP_CONFIG === "object" ? window.APP_CONFIG : {};
       const responseVoterStorageKey = "itDayResponseVoterId";
       const responseChoiceStorageKey = "itDayResponseChoice";
       const responseSyncStorageKey = "itDayResponseSyncState";
-      const responseApiBaseUrl = "/api/reactions";
+      const registrationSyncStorageKey = "itDayRegistrationSyncState";
+      const configuredApiBaseUrl = typeof appConfig.apiBaseUrl === "string" ? appConfig.apiBaseUrl.trim() : "";
+      const apiBaseUrl = resolveApiBaseUrl(configuredApiBaseUrl);
+      const responseApiBaseUrl = apiBaseUrl + "/api/reactions";
+      const responseApiPathname = getApiPathname(responseApiBaseUrl);
       const responsePollingIntervalMs = 15000;
       const responseReconnectBaseDelayMs = 1800;
       const responseReconnectMaxDelayMs = 30000;
@@ -27,14 +32,17 @@
       const responseHttpTimeoutMs = 12000;
       const responseUnavailableMessage = "Live response counter is unavailable. Retrying in background.";
       const responseAlreadySubmittedMessage = "You have already submitted your response. You can only respond once on this device.";
-      const eventRegistrationApiBaseUrl = "/api/event-registrations";
+      const eventRegistrationApiBaseUrl = apiBaseUrl + "/api/event-registrations";
+      const eventRegistrationApiPathname = getApiPathname(eventRegistrationApiBaseUrl);
+      const resetRegistrationsApiBaseUrl = apiBaseUrl + "/api/reset-registrations";
+      const resetRegistrationsApiPathname = getApiPathname(resetRegistrationsApiBaseUrl);
       const eventRegistrationPollingIntervalMs = 12000;
       const adminModeParam = "admin";
       const adminTokenParam = "adminToken";
       const adminTokenSessionStorageKey = "itDayAdminTokenHash";
+      const adminTokenLocalStorageKey = "itDayAdminTokenHash";
       const adminResetTokenHeader = "X-Admin-Token-Hash";
       const adminResetAuthorizationKey = {};
-      const appConfig = window.APP_CONFIG && typeof window.APP_CONFIG === "object" ? window.APP_CONFIG : {};
       const supabaseUrl = typeof appConfig.supabaseUrl === "string" ? appConfig.supabaseUrl.trim() : "";
       const supabaseAnonKey = typeof appConfig.supabaseAnonKey === "string" ? appConfig.supabaseAnonKey.trim() : "";
       const defaultResponseAdminTokenHash = "fb7cd66cd9802076b019b15ddf51cfbfd6ae603642a4153a5b78ae8696515bd4";
@@ -61,7 +69,9 @@
       let authStateSubscription = null;
       let responseAdminActions = null;
       let resetCountsButton = null;
+      let resetRegistrationsButton = null;
       let isResetRequestPending = false;
+      let isRegistrationResetPending = false;
       let responsePollIntervalId = null;
       let responseRealtimeChannel = null;
       let registrationPollIntervalId = null;
@@ -328,6 +338,23 @@
         countdownChip.textContent = "Starts in " + days + "d " + hours + "h " + minutes + "m";
       }
 
+      function resolveApiBaseUrl(value) {
+        const normalizedValue = typeof value === "string" ? value.trim() : "";
+        if (!normalizedValue) {
+          return "";
+        }
+
+        return normalizedValue.replace(/\/+$/, "");
+      }
+
+      function getApiPathname(apiUrl) {
+        try {
+          return new URL(apiUrl, window.location.origin).pathname;
+        } catch (error) {
+          return apiUrl;
+        }
+      }
+
       function sanitizeResponseCount(value) {
         const numeric = Number(value);
         return Number.isFinite(numeric) && numeric > 0 ? Math.floor(numeric) : 0;
@@ -437,6 +464,74 @@
         }
       }
 
+      function syncRegistrationStateToOtherTabs(reason) {
+        try {
+          localStorage.setItem(
+            registrationSyncStorageKey,
+            JSON.stringify({
+              reason: reason || "sync",
+              updatedAt: Date.now(),
+            })
+          );
+        } catch (error) {
+          // Ignore cross-tab synchronization errors.
+        }
+      }
+
+      function buildDefaultRegistrationPerFamily() {
+        return familyOptions.map((family) => ({
+          family,
+          count: 0,
+          limit: 2,
+          remaining: 2,
+        }));
+      }
+
+      function buildEmptyRegistrationState(eventId, reason) {
+        const isTeamEvent = eventId === "codm-tournament";
+        const stats = isTeamEvent
+          ? {
+            mode: "team",
+            totalTeams: 0,
+            maxTeams: 8,
+            remainingTeams: 8,
+            isClosed: false,
+            perFamily: buildDefaultRegistrationPerFamily(),
+            teams: [],
+          }
+          : {
+            mode: "individual",
+            totalParticipants: 0,
+            maxParticipants: 8,
+            remainingParticipants: 8,
+            isClosed: false,
+            perFamily: buildDefaultRegistrationPerFamily(),
+            allFamiliesComplete: eventId === "sudoku-game-easy-level" ? false : null,
+          };
+
+        return {
+          eventId,
+          eventTitle: eventTitleMap[eventId] || humanizeEventId(eventId),
+          registrations: [],
+          stats,
+          updatedAt: new Date().toISOString(),
+          reason: reason || "reset",
+        };
+      }
+
+      function resetCachedRegistrationState(reason) {
+        const trackedEventIds = new Set(Object.keys(registrationStateByEventId));
+        registrationEventIds.forEach((eventId) => {
+          trackedEventIds.add(eventId);
+        });
+
+        trackedEventIds.forEach((eventId) => {
+          registrationStateByEventId[eventId] = buildEmptyRegistrationState(eventId, reason || "reset");
+        });
+
+        refreshActiveEventRegistrationFormState();
+      }
+
       function applySyncedResponseState(payload) {
         if (!payload || typeof payload !== "object") {
           return;
@@ -468,6 +563,27 @@
             applySyncedResponseState(payload);
           } catch (error) {
             // Ignore malformed cross-tab synchronization payloads.
+          }
+
+          return;
+        }
+
+        if (event.key === registrationSyncStorageKey && event.newValue) {
+          try {
+            const payload = JSON.parse(event.newValue);
+            resetCachedRegistrationState(payload && payload.reason ? payload.reason : "reset-sync");
+          } catch (error) {
+            // Ignore malformed cross-tab synchronization payloads.
+          }
+
+          return;
+        }
+
+        if (event.key === adminTokenLocalStorageKey) {
+          if (canUseAdminControls()) {
+            ensureAdminResetControls();
+          } else {
+            removeAdminResetControls();
           }
         }
       }
@@ -645,8 +761,20 @@
       }
 
       function getStoredAdminTokenHash() {
+        let sessionTokenHash = "";
+
         try {
-          return normalizeAdminTokenHash(sessionStorage.getItem(adminTokenSessionStorageKey));
+          sessionTokenHash = normalizeAdminTokenHash(sessionStorage.getItem(adminTokenSessionStorageKey));
+        } catch (error) {
+          sessionTokenHash = "";
+        }
+
+        if (sessionTokenHash) {
+          return sessionTokenHash;
+        }
+
+        try {
+          return normalizeAdminTokenHash(localStorage.getItem(adminTokenLocalStorageKey));
         } catch (error) {
           return "";
         }
@@ -663,6 +791,16 @@
           }
         } catch (error) {
           // Ignore session storage errors.
+        }
+
+        try {
+          if (normalizedTokenHash) {
+            localStorage.setItem(adminTokenLocalStorageKey, normalizedTokenHash);
+          } else {
+            localStorage.removeItem(adminTokenLocalStorageKey);
+          }
+        } catch (error) {
+          // Ignore local storage errors.
         }
       }
 
@@ -806,24 +944,24 @@
           body = requestOptions.body;
         }
 
-        if (requestUrl.pathname === responseApiBaseUrl && method === "GET") {
+        if (requestUrl.pathname === responseApiPathname && method === "GET") {
           return callBackendWithFallback("get_reaction_state", {}, requestUrl, requestOptions);
         }
 
-        if (requestUrl.pathname === responseApiBaseUrl + "/vote-status" && method === "GET") {
+        if (requestUrl.pathname === responseApiPathname + "/vote-status" && method === "GET") {
           return callBackendWithFallback("get_vote_status", {
             p_voter_id: requestUrl.searchParams.get("voterId") || "",
           }, requestUrl, requestOptions);
         }
 
-        if (requestUrl.pathname === responseApiBaseUrl && method === "POST") {
+        if (requestUrl.pathname === responseApiPathname && method === "POST") {
           return callBackendWithFallback("submit_vote", {
             p_voter_id: body && typeof body.voterId === "string" ? body.voterId : "",
             p_response_type: body && typeof body.responseType === "string" ? body.responseType : "",
           }, requestUrl, requestOptions);
         }
 
-        if (requestUrl.pathname === responseApiBaseUrl + "/reset" && method === "POST") {
+        if (requestUrl.pathname === responseApiPathname + "/reset" && method === "POST") {
           const requestAdminTokenHash = getRequestHeaderValue(requestOptions.headers, adminResetTokenHeader);
           const resetRpcFunctionName = requestAdminTokenHash ? "reset_reactions_with_token" : "reset_reactions";
           const resetRpcParams = requestAdminTokenHash
@@ -835,13 +973,25 @@
           });
         }
 
-        if (requestUrl.pathname === eventRegistrationApiBaseUrl && method === "GET") {
+        if (requestUrl.pathname === resetRegistrationsApiPathname && method === "POST") {
+          const requestAdminTokenHash = getRequestHeaderValue(requestOptions.headers, adminResetTokenHeader);
+          const resetRpcFunctionName = requestAdminTokenHash ? "reset_all_registrations_with_token" : "reset_all_registrations";
+          const resetRpcParams = requestAdminTokenHash
+            ? { p_admin_token_hash: requestAdminTokenHash }
+            : {};
+
+          return callBackendWithFallback(resetRpcFunctionName, resetRpcParams, requestUrl, requestOptions, {
+            allowForbiddenFallback: Boolean(requestAdminTokenHash),
+          });
+        }
+
+        if (requestUrl.pathname === eventRegistrationApiPathname && method === "GET") {
           return callBackendWithFallback("get_registration_state", {
             p_event_id: requestUrl.searchParams.get("eventId") || "",
           }, requestUrl, requestOptions);
         }
 
-        if (requestUrl.pathname === eventRegistrationApiBaseUrl && method === "POST") {
+        if (requestUrl.pathname === eventRegistrationApiPathname && method === "POST") {
           return callBackendWithFallback("submit_event_registration", {
             p_event_id: body && typeof body.eventId === "string" ? body.eventId : "",
             p_family: body && typeof body.family === "string" ? body.family : "",
@@ -1000,10 +1150,16 @@
 
       function removeAdminResetControls() {
         isResetRequestPending = false;
+        isRegistrationResetPending = false;
 
         if (resetCountsButton) {
           resetCountsButton.removeEventListener("click", onAdminResetClick);
           resetCountsButton = null;
+        }
+
+        if (resetRegistrationsButton) {
+          resetRegistrationsButton.removeEventListener("click", onAdminResetRegistrationsClick);
+          resetRegistrationsButton = null;
         }
 
         if (responseAdminActions) {
@@ -1012,32 +1168,59 @@
         }
       }
 
+      function canUseAdminControls() {
+        return isAdminAuthorized || isAdminModeRequested || isAdminTokenAuthorized || Boolean(getActiveAdminTokenHash());
+      }
+
+      function isAdmin() {
+        return isAdminAuthorized || Boolean(getActiveAdminTokenHash());
+      }
+
       function ensureAdminResetControls() {
-        const hasStoredTokenAdminAccess = Boolean(getActiveAdminTokenHash());
+        const hasTokenAdminAccess = Boolean(getActiveAdminTokenHash());
 
         if (
           !responseSummary ||
-          responseAdminActions ||
-          (!isAdminAuthorized && !isAdminModeRequested && !isAdminTokenAuthorized && !hasStoredTokenAdminAccess)
+          !canUseAdminControls()
         ) {
           return;
         }
 
-        responseAdminActions = document.createElement("div");
-        responseAdminActions.className = "response-admin-actions";
-        responseAdminActions.id = "response-admin-actions";
+        if (!responseAdminActions) {
+          responseAdminActions = document.createElement("div");
+          responseAdminActions.className = "response-admin-actions";
+          responseAdminActions.id = "response-admin-actions";
 
-        resetCountsButton = document.createElement("button");
-        resetCountsButton.type = "button";
-        resetCountsButton.className = "btn btn-secondary admin-reset-button";
-        resetCountsButton.id = "reset-counts-button";
-        resetCountsButton.textContent = "Reset Counts";
-        resetCountsButton.addEventListener("click", onAdminResetClick);
-        resetCountsButton.disabled = isResetRequestPending;
-        resetCountsButton.setAttribute("aria-busy", isResetRequestPending ? "true" : "false");
+          resetCountsButton = document.createElement("button");
+          resetCountsButton.type = "button";
+          resetCountsButton.className = "btn btn-secondary admin-reset-button";
+          resetCountsButton.id = "reset-counts-button";
+          resetCountsButton.textContent = "Reset Counts";
+          resetCountsButton.addEventListener("click", onAdminResetClick);
+          resetCountsButton.disabled = isResetRequestPending;
+          resetCountsButton.setAttribute("aria-busy", isResetRequestPending ? "true" : "false");
 
-        responseAdminActions.appendChild(resetCountsButton);
-        responseSummary.insertAdjacentElement("afterend", responseAdminActions);
+          responseAdminActions.appendChild(resetCountsButton);
+          responseSummary.insertAdjacentElement("afterend", responseAdminActions);
+        }
+
+        if (hasTokenAdminAccess && !resetRegistrationsButton && responseAdminActions) {
+          resetRegistrationsButton = document.createElement("button");
+          resetRegistrationsButton.type = "button";
+          resetRegistrationsButton.className = "btn btn-secondary admin-reset-button";
+          resetRegistrationsButton.id = "reset-registrations-button";
+          resetRegistrationsButton.textContent = "Reset Registrations";
+          resetRegistrationsButton.addEventListener("click", onAdminResetRegistrationsClick);
+          resetRegistrationsButton.disabled = isRegistrationResetPending;
+          resetRegistrationsButton.setAttribute("aria-busy", isRegistrationResetPending ? "true" : "false");
+          responseAdminActions.appendChild(resetRegistrationsButton);
+        }
+
+        if (!hasTokenAdminAccess && resetRegistrationsButton) {
+          resetRegistrationsButton.removeEventListener("click", onAdminResetRegistrationsClick);
+          resetRegistrationsButton.remove();
+          resetRegistrationsButton = null;
+        }
       }
 
       async function refreshAdminAuthorization() {
@@ -1148,8 +1331,7 @@
         if (supabaseClient && !authStateSubscription) {
           const authListener = supabaseClient.auth.onAuthStateChange(() => {
             refreshAdminAuthorization().then(() => {
-              const hasStoredTokenAdminAccess = Boolean(getActiveAdminTokenHash());
-              if (isAdminAuthorized || isAdminModeRequested || isAdminTokenAuthorized || hasStoredTokenAdminAccess) {
+              if (canUseAdminControls()) {
                 ensureAdminResetControls();
               } else {
                 removeAdminResetControls();
@@ -1160,7 +1342,7 @@
           authStateSubscription = authListener && authListener.data ? authListener.data.subscription : null;
         }
 
-        if (isAdminAuthorized || isAdminModeRequested || isAdminTokenAuthorized || Boolean(getActiveAdminTokenHash())) {
+        if (canUseAdminControls()) {
           ensureAdminResetControls();
         }
       }
@@ -1298,13 +1480,24 @@
         resetCountsButton.setAttribute("aria-busy", isResetRequestPending ? "true" : "false");
       }
 
+      function setResetRegistrationsButtonPendingState(isPending) {
+        isRegistrationResetPending = Boolean(isPending);
+
+        if (!resetRegistrationsButton) {
+          return;
+        }
+
+        resetRegistrationsButton.disabled = isRegistrationResetPending;
+        resetRegistrationsButton.setAttribute("aria-busy", isRegistrationResetPending ? "true" : "false");
+      }
+
       async function resetResponseCounts(authorizationKey) {
         const adminRequiredMessage = "Admin access required.";
         const serverFailureMessage = "Unable to reset counts right now. Please try again later.";
         const activeAdminTokenHash = getActiveAdminTokenHash();
         const hasTokenAdminAccess = Boolean(activeAdminTokenHash);
 
-        if ((!isAdminAuthorized && !hasTokenAdminAccess) || authorizationKey !== adminResetAuthorizationKey) {
+        if (!isAdmin() || authorizationKey !== adminResetAuthorizationKey) {
           console.warn("[admin reset] Reset blocked because admin authorization is missing.", {
             isAdminAuthorized,
             hasTokenAdminAccess,
@@ -1367,9 +1560,7 @@
           return;
         }
 
-        const hasTokenAdminAccess = Boolean(getActiveAdminTokenHash());
-
-        if (!isAdminAuthorized && !hasTokenAdminAccess) {
+        if (!isAdmin()) {
           const signedIn = await promptAdminSignIn();
           if (!signedIn) {
             showToast("Admin access required.");
@@ -1383,6 +1574,99 @@
         }
 
         await resetResponseCounts(adminResetAuthorizationKey);
+      }
+
+      async function resetAllRegistrations(authorizationKey) {
+        const adminRequiredMessage = "Admin access required.";
+        const serverFailureMessage = "Unable to reset registrations right now. Please try again.";
+        const successMessage = "All registrations have been reset successfully.";
+        const activeAdminTokenHash = getActiveAdminTokenHash();
+        const hasTokenAdminAccess = Boolean(activeAdminTokenHash);
+
+        if (!isAdmin() || authorizationKey !== adminResetAuthorizationKey) {
+          console.warn("[admin reset] Registration reset blocked because admin authorization is missing.", {
+            isAdminAuthorized,
+            hasTokenAdminAccess,
+          });
+          showToast(adminRequiredMessage);
+          return;
+        }
+
+        if (isRegistrationResetPending) {
+          return;
+        }
+
+        setResetRegistrationsButtonPendingState(true);
+
+        try {
+          const requestHeaders = {};
+          if (hasTokenAdminAccess) {
+            requestHeaders[adminResetTokenHeader] = activeAdminTokenHash;
+          }
+
+          const result = await fetchJson(resetRegistrationsApiBaseUrl, {
+            method: "POST",
+            headers: requestHeaders,
+            body: JSON.stringify({}),
+          });
+
+          if (!result.ok) {
+            if (result.status === 403) {
+              console.warn("[admin reset] Registration reset request was rejected with 403.", {
+                hasTokenAdminAccess,
+                payload: result.payload,
+              });
+              showToast(adminRequiredMessage);
+              return;
+            }
+
+            console.error("[admin reset] Registration reset request failed.", {
+              status: result.status,
+              payload: result.payload,
+              hasTokenAdminAccess,
+            });
+            showToast(serverFailureMessage);
+            return;
+          }
+
+          resetCachedRegistrationState("reset");
+          syncRegistrationStateToOtherTabs("reset");
+
+          const activeEventId = getActiveEventId();
+          if (activeEventId && isManagedRegistrationEvent(activeEventId)) {
+            fetchEventRegistrationState(activeEventId).catch(() => {
+              // Keep UI responsive while background refresh retries.
+            });
+          }
+
+          showToast(successMessage);
+        } catch (error) {
+          console.error("[admin reset] Registration reset request threw an unexpected error.", error);
+          showToast(serverFailureMessage);
+        } finally {
+          setResetRegistrationsButtonPendingState(false);
+        }
+      }
+
+      async function onAdminResetRegistrationsClick() {
+        if (isRegistrationResetPending) {
+          return;
+        }
+
+        if (!isAdmin()) {
+          const signedIn = await promptAdminSignIn();
+          if (!signedIn) {
+            showToast("Admin access required.");
+            return;
+          }
+        }
+
+        const approved = window.confirm("Are you sure you want to reset all registrations?");
+        if (!approved) {
+          return;
+        }
+
+        await resetAllRegistrations(adminResetAuthorizationKey);
       }
 
       function humanizeEventId(eventId) {

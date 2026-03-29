@@ -6,6 +6,12 @@ const path = require("node:path");
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || "0.0.0.0";
 const DEFAULT_ADMIN_TOKEN_HASH = "fb7cd66cd9802076b019b15ddf51cfbfd6ae603642a4153a5b78ae8696515bd4";
+const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+];
 const DATA_DIR = path.join(__dirname, "data");
 const DATA_FILE = path.join(DATA_DIR, "reactions.json");
 const REGISTRATION_EVENT_IDS = new Set([
@@ -64,16 +70,93 @@ function resolveAdminTokenHash() {
 
 const ADMIN_TOKEN_HASH = resolveAdminTokenHash();
 
+function normalizeOrigin(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.trim().replace(/\/+$/, "").toLowerCase();
+}
+
+function resolveAllowedOrigins() {
+  const configuredOrigins = typeof process.env.ALLOWED_ORIGINS === "string"
+    ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => normalizeOrigin(origin)).filter((origin) => Boolean(origin))
+    : [];
+
+  if (configuredOrigins.length > 0) {
+    return configuredOrigins;
+  }
+
+  return DEFAULT_ALLOWED_ORIGINS.map((origin) => normalizeOrigin(origin));
+}
+
+const ALLOWED_ORIGINS = resolveAllowedOrigins();
+
+function isOriginAllowed(origin) {
+  const normalizedOrigin = normalizeOrigin(origin);
+  if (!normalizedOrigin) {
+    return true;
+  }
+
+  for (let i = 0; i < ALLOWED_ORIGINS.length; i += 1) {
+    const allowedOrigin = ALLOWED_ORIGINS[i];
+    if (allowedOrigin === "*") {
+      return true;
+    }
+
+    if (allowedOrigin.endsWith("*")) {
+      const prefix = allowedOrigin.slice(0, -1);
+      if (prefix && normalizedOrigin.startsWith(prefix)) {
+        return true;
+      }
+    }
+
+    if (allowedOrigin === normalizedOrigin) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function getProvidedAdminTokenHash(req) {
+  return normalizeAdminTokenHash(String(req.header("X-Admin-Token-Hash") || ""));
+}
+
+function hasValidAdminToken(req) {
+  const providedHash = getProvidedAdminTokenHash(req);
+  return Boolean(providedHash) && providedHash === ADMIN_TOKEN_HASH;
+}
+
 const app = express();
 app.use(express.json({ limit: "16kb" }));
 
 app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  const requestOrigin = String(req.header("Origin") || "").trim();
+  const originAllowed = isOriginAllowed(requestOrigin);
+
+  if (requestOrigin && originAllowed) {
+    res.setHeader("Access-Control-Allow-Origin", requestOrigin);
+    res.setHeader("Vary", "Origin");
+  } else if (!requestOrigin) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  }
+
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Admin-Token-Hash");
 
   if (req.method === "OPTIONS") {
+    if (requestOrigin && !originAllowed) {
+      res.status(403).json({ error: "forbidden_origin" });
+      return;
+    }
+
     res.sendStatus(204);
+    return;
+  }
+
+  if (requestOrigin && !originAllowed) {
+    res.status(403).json({ error: "forbidden_origin", message: "Origin is not allowed." });
     return;
   }
 
@@ -419,7 +502,15 @@ function queueMutation(mutate, reason) {
         broadcastState(reason);
       }
 
-      if (result.registrationEventId) {
+      if (Array.isArray(result.registrationEventIds)) {
+        const eventIds = result.registrationEventIds
+          .map((eventId) => sanitizeEventId(eventId))
+          .filter((eventId) => isRegistrationEventId(eventId));
+
+        for (let i = 0; i < eventIds.length; i += 1) {
+          broadcastRegistrationState(reason, eventIds[i]);
+        }
+      } else if (result.registrationEventId) {
         broadcastRegistrationState(reason, result.registrationEventId);
       }
     }
@@ -513,9 +604,9 @@ app.post("/api/reactions", async (req, res) => {
 });
 
 app.post("/api/reactions/reset", async (req, res) => {
-  const providedHash = String(req.header("X-Admin-Token-Hash") || "").trim();
+  const providedHash = getProvidedAdminTokenHash(req);
 
-  if (!providedHash || providedHash !== ADMIN_TOKEN_HASH) {
+  if (!hasValidAdminToken(req)) {
     console.warn("[admin reset] Forbidden reset attempt via /api/reactions/reset.", {
       hasProvidedHash: Boolean(providedHash),
     });
@@ -541,6 +632,51 @@ app.post("/api/reactions/reset", async (req, res) => {
   } catch (error) {
     console.error("Unable to reset votes:", error);
     res.status(500).json({ error: "internal_error", message: "Unable to reset counts right now. Please try again later." });
+  }
+});
+
+app.post("/api/reset-registrations", async (req, res) => {
+  const providedHash = getProvidedAdminTokenHash(req);
+
+  if (!hasValidAdminToken(req)) {
+    console.warn("[admin reset] Forbidden reset attempt via /api/reset-registrations.", {
+      hasProvidedHash: Boolean(providedHash),
+    });
+    res.status(403).json({ error: "forbidden", message: "Admin access required." });
+    return;
+  }
+
+  try {
+    const outcome = await queueMutation(() => {
+      const knownEventIds = new Set(Array.from(REGISTRATION_EVENT_IDS));
+
+      for (let i = 0; i < store.registrations.length; i += 1) {
+        const registration = store.registrations[i];
+        const registrationEventId = sanitizeEventId(registration && registration.eventId);
+        if (isRegistrationEventId(registrationEventId)) {
+          knownEventIds.add(registrationEventId);
+        }
+      }
+
+      store.registrations = [];
+
+      return {
+        changed: true,
+        registrationEventIds: Array.from(knownEventIds),
+        data: {
+          eventIds: Array.from(knownEventIds),
+        },
+      };
+    }, "registration-reset");
+
+    res.json({
+      message: "All registrations have been reset successfully.",
+      eventIds: outcome && Array.isArray(outcome.eventIds) ? outcome.eventIds : Array.from(REGISTRATION_EVENT_IDS),
+      updatedAt: store.updatedAt,
+    });
+  } catch (error) {
+    console.error("Unable to reset registrations:", error);
+    res.status(500).json({ error: "internal_error", message: "Unable to reset registrations right now. Please try again." });
   }
 });
 
