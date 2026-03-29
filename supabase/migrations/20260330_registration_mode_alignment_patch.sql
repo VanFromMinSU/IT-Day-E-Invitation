@@ -110,8 +110,8 @@ begin
     individual_family_limit := 1;
     individual_max_participants := 4;
   elsif normalized_event = 'fast-typing' then
-    individual_family_limit := 3;
-    individual_max_participants := 12;
+    individual_family_limit := 2;
+    individual_max_participants := 8;
   end if;
 
   event_title_value := public.registration_event_title(normalized_event);
@@ -298,8 +298,8 @@ begin
     individual_family_limit := 1;
     individual_max_participants := 4;
   elsif normalized_event = 'fast-typing' then
-    individual_family_limit := 3;
-    individual_max_participants := 12;
+    individual_family_limit := 2;
+    individual_max_participants := 8;
   end if;
 
   if normalized_family not in ('Family 1 - Claude', 'Family 2 - Grok', 'Family 3 - Gemini', 'Family 4 - Dola') then

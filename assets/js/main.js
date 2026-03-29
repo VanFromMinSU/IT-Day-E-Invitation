@@ -237,7 +237,7 @@
             '</ol>' +
             '<h5>Participants</h5>' +
             '<ol>' +
-            '<li>Each family can register up to three (3) participants.</li>' +
+            '<li>Each family can register up to two (2) participants.</li>' +
             '<li>The deadline for participant registration is 1 hour before the competition.</li>' +
             '<li>One (1) watcher from each team will monitor the entire competition.</li>' +
             '</ol>' +
@@ -2605,6 +2605,33 @@
         setFormControlsDisabled(form, isSubmitting);
       }
 
+      function updateIndividualSubmitAvailability(form, state) {
+        const submitButton = form.querySelector('button[type="submit"]');
+        if (!(submitButton instanceof HTMLButtonElement)) {
+          return;
+        }
+
+        const stats = state && state.stats ? state.stats : null;
+        if (stats && stats.isClosed) {
+          submitButton.disabled = true;
+          return;
+        }
+
+        if ((form.dataset.registrationType || "") !== "individual") {
+          return;
+        }
+
+        const familySelect = form.elements.namedItem("family");
+        if (!(familySelect instanceof HTMLSelectElement) || !familySelect.value) {
+          submitButton.disabled = false;
+          return;
+        }
+
+        const familyEntries = stats && Array.isArray(stats.perFamily) ? stats.perFamily : [];
+        const familyEntry = familyEntries.find((entry) => entry.family === familySelect.value);
+        submitButton.disabled = Boolean(familyEntry && familyEntry.count >= familyEntry.limit);
+      }
+
       function updateTeamSubmitAvailability(form, state, eventId) {
         const submitButton = form.querySelector('button[type="submit"]');
         if (!(submitButton instanceof HTMLButtonElement)) {
@@ -2644,6 +2671,7 @@
         renderRegisteredParticipants(form, eventId, state);
 
         if (!state || !state.stats) {
+          updateIndividualSubmitAvailability(form, null);
           updateTeamSubmitAvailability(form, null, eventId);
           return;
         }
@@ -2657,6 +2685,7 @@
           applyFamilySlotAvailability(form, state);
         }
 
+        updateIndividualSubmitAvailability(form, state);
         updateTeamSubmitAvailability(form, state, eventId);
 
         if (isClosed) {
@@ -3273,8 +3302,11 @@
                 rememberOwnedRegistration(result.payload.registration);
               }
 
-              setEventFormFeedback(form, "Registration submitted!", false);
-              showToast("Registration submitted!");
+              const successMessage = activeEventId === "fast-typing"
+                ? "Registration successful."
+                : "Registration submitted!";
+              setEventFormFeedback(form, successMessage, false);
+              showToast(successMessage);
               form.reset();
             } finally {
               form.dataset.isSubmitting = "false";

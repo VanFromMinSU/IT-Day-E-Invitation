@@ -53,8 +53,8 @@ const EVENT_TITLE_MAP = {
 function getIndividualRegistrationConfig(eventId) {
   if (eventId === "fast-typing") {
     return {
-      familyLimit: 3,
-      maxParticipants: FAMILY_OPTIONS.length * 3,
+      familyLimit: 2,
+      maxParticipants: FAMILY_OPTIONS.length * 2,
     };
   }
 
