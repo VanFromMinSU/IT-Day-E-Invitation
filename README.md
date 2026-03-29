@@ -21,6 +21,7 @@ No local Express server is required in production.
    - supabase/migrations/20260328_realtime_backend.sql
    - supabase/migrations/20260328_admin_token_reset_support.sql
    - supabase/migrations/20260329_admin_reset_all_registrations.sql
+   - supabase/migrations/20260329_registration_owner_cancel_support.sql
 3. In Database -> Replication, ensure Realtime is enabled for:
    - public.event_votes
    - public.event_registrations
@@ -62,6 +63,7 @@ Notes:
 - Regular users can read and submit reactions/registrations.
 - Reset counts requires either an authenticated admin user or a valid owner token.
 - Reset registrations requires either an authenticated admin user or a valid owner token.
+- Registration cancellation is owner-only and requires the same local owner token used at registration time.
 - Token mode can reset counts through Supabase RPC and, when available, the same-origin `/api/reactions/reset` fallback endpoint.
 - Token mode can reset registrations through Supabase RPC and, when available, `/api/reset-registrations` fallback endpoint.
 

@@ -21,6 +21,8 @@
       const responseChoiceStorageKey = "itDayResponseChoice";
       const responseSyncStorageKey = "itDayResponseSyncState";
       const registrationSyncStorageKey = "itDayRegistrationSyncState";
+      const registrationOwnerTokenStorageKey = "itDayRegistrationOwnerToken";
+      const registrationOwnershipStorageKey = "itDayRegistrationOwnership";
       const configuredApiBaseUrl = typeof appConfig.apiBaseUrl === "string" ? appConfig.apiBaseUrl.trim() : "";
       const apiBaseUrl = resolveApiBaseUrl(configuredApiBaseUrl);
       const responseApiBaseUrl = apiBaseUrl + "/api/reactions";
@@ -78,6 +80,8 @@
       let registrationRealtimeChannel = null;
       let responseCounts = { interested: 0, excited: 0 };
       const registrationStateByEventId = {};
+      let ownedRegistrationLookup = loadOwnedRegistrationLookup();
+      const pendingRegistrationCancellationIds = new Set();
       let hasSubmittedResponse = false;
       let submittedResponseType = "";
       let isResponseSubmissionPending = false;
@@ -464,18 +468,119 @@
         }
       }
 
-      function syncRegistrationStateToOtherTabs(reason) {
+      function syncRegistrationStateToOtherTabs(reason, eventId, state) {
+        const payload = {
+          reason: reason || "sync",
+          updatedAt: Date.now(),
+        };
+
+        if (eventId) {
+          payload.eventId = eventId;
+        }
+
+        if (state && typeof state === "object") {
+          payload.state = state;
+        }
+
         try {
           localStorage.setItem(
             registrationSyncStorageKey,
-            JSON.stringify({
-              reason: reason || "sync",
-              updatedAt: Date.now(),
-            })
+            JSON.stringify(payload)
           );
         } catch (error) {
           // Ignore cross-tab synchronization errors.
         }
+      }
+
+      function normalizeRegistrationOwnerToken(value) {
+        const normalizedValue = typeof value === "string" ? value.trim() : "";
+        return /^[A-Za-z0-9_:-]{16,180}$/.test(normalizedValue) ? normalizedValue : "";
+      }
+
+      function getOrCreateRegistrationOwnerToken() {
+        let existingToken = "";
+
+        try {
+          existingToken = normalizeRegistrationOwnerToken(localStorage.getItem(registrationOwnerTokenStorageKey));
+        } catch (error) {
+          existingToken = "";
+        }
+
+        if (existingToken) {
+          return existingToken;
+        }
+
+        const generatedToken = window.crypto && typeof window.crypto.randomUUID === "function"
+          ? "owner-" + window.crypto.randomUUID()
+          : "owner-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 12);
+
+        try {
+          localStorage.setItem(registrationOwnerTokenStorageKey, generatedToken);
+        } catch (error) {
+          // Continue with in-memory generated token only.
+        }
+
+        return generatedToken;
+      }
+
+      function loadOwnedRegistrationLookup() {
+        try {
+          const raw = localStorage.getItem(registrationOwnershipStorageKey);
+          if (!raw) {
+            return {};
+          }
+
+          const parsed = JSON.parse(raw);
+          if (!parsed || typeof parsed !== "object") {
+            return {};
+          }
+
+          return parsed;
+        } catch (error) {
+          return {};
+        }
+      }
+
+      function persistOwnedRegistrationLookup() {
+        try {
+          localStorage.setItem(registrationOwnershipStorageKey, JSON.stringify(ownedRegistrationLookup));
+        } catch (error) {
+          // Ignore ownership persistence errors.
+        }
+      }
+
+      function rememberOwnedRegistration(registration) {
+        if (!registration || !registration.id) {
+          return;
+        }
+
+        ownedRegistrationLookup[registration.id] = {
+          eventId: registration.eventId || "",
+          updatedAt: Date.now(),
+        };
+
+        persistOwnedRegistrationLookup();
+      }
+
+      function forgetOwnedRegistration(registrationId) {
+        if (!registrationId || !ownedRegistrationLookup[registrationId]) {
+          return;
+        }
+
+        delete ownedRegistrationLookup[registrationId];
+        persistOwnedRegistrationLookup();
+      }
+
+      function isOwnedRegistration(registration) {
+        if (!registration || !registration.id) {
+          return false;
+        }
+
+        if (registration.canCancel === true) {
+          return true;
+        }
+
+        return Boolean(ownedRegistrationLookup[registration.id]);
       }
 
       function buildDefaultRegistrationPerFamily() {
@@ -571,7 +676,11 @@
         if (event.key === registrationSyncStorageKey && event.newValue) {
           try {
             const payload = JSON.parse(event.newValue);
-            resetCachedRegistrationState(payload && payload.reason ? payload.reason : "reset-sync");
+            if (payload && payload.reason === "reset") {
+              resetCachedRegistrationState("reset-sync");
+            } else if (payload && payload.state && payload.eventId) {
+              cacheRegistrationState(payload.state);
+            }
           } catch (error) {
             // Ignore malformed cross-tab synchronization payloads.
           }
@@ -585,6 +694,13 @@
           } else {
             removeAdminResetControls();
           }
+
+          return;
+        }
+
+        if (event.key === registrationOwnershipStorageKey) {
+          ownedRegistrationLookup = loadOwnedRegistrationLookup();
+          refreshActiveEventRegistrationFormState();
         }
       }
 
@@ -988,6 +1104,7 @@
         if (requestUrl.pathname === eventRegistrationApiPathname && method === "GET") {
           return callBackendWithFallback("get_registration_state", {
             p_event_id: requestUrl.searchParams.get("eventId") || "",
+            p_owner_token: requestUrl.searchParams.get("ownerToken") || "",
           }, requestUrl, requestOptions);
         }
 
@@ -998,6 +1115,15 @@
             p_name: body && typeof body.name === "string" ? body.name : null,
             p_captain: body && typeof body.captain === "string" ? body.captain : null,
             p_members: body && Array.isArray(body.members) ? body.members : null,
+            p_owner_token: body && typeof body.ownerToken === "string" ? body.ownerToken : "",
+          }, requestUrl, requestOptions);
+        }
+
+        if (requestUrl.pathname === eventRegistrationApiPathname + "/cancel" && method === "POST") {
+          return callBackendWithFallback("cancel_event_registration", {
+            p_registration_id: body && typeof body.registrationId === "string" ? body.registrationId : "",
+            p_event_id: body && typeof body.eventId === "string" ? body.eventId : "",
+            p_owner_token: body && typeof body.ownerToken === "string" ? body.ownerToken : "",
           }, requestUrl, requestOptions);
         }
 
@@ -1922,7 +2048,13 @@
       }
 
       async function fetchEventRegistrationState(eventId) {
-        const requestUrl = eventRegistrationApiBaseUrl + "?eventId=" + encodeURIComponent(eventId);
+        const ownerToken = getOrCreateRegistrationOwnerToken();
+        const requestUrl =
+          eventRegistrationApiBaseUrl +
+          "?eventId=" +
+          encodeURIComponent(eventId) +
+          "&ownerToken=" +
+          encodeURIComponent(ownerToken);
         const result = await fetchJson(requestUrl, { cache: "no-store" });
 
         if (!result.ok) {
@@ -2067,6 +2199,81 @@
           "</ul>";
       }
 
+      function renderRegisteredParticipants(form, eventId, state) {
+        const participantsPanel = form.querySelector("[data-registered-participants='true']");
+        if (!participantsPanel) {
+          return;
+        }
+
+        const registrations = state && Array.isArray(state.registrations) ? state.registrations : [];
+        if (registrations.length === 0) {
+          participantsPanel.innerHTML =
+            '<h6 class="event-registered-title">Registered Participants</h6>' +
+            '<p class="event-registration-soon">No registered participants yet.</p>';
+          return;
+        }
+
+        const participantRows = registrations
+          .map((registration) => {
+            const registrationId = registration && typeof registration.id === "string" ? registration.id : "";
+            const family = registration && typeof registration.family === "string" ? registration.family : "";
+            const registrationType = registration && typeof registration.registrationType === "string" ? registration.registrationType : "individual";
+            const canCancel = isOwnedRegistration(registration);
+            const isPendingCancellation = registrationId && pendingRegistrationCancellationIds.has(registrationId);
+
+            let detailMarkup = "";
+            if (registrationType === "team") {
+              const captain = registration && typeof registration.captain === "string" ? registration.captain : "";
+              const members = registration && Array.isArray(registration.members) ? registration.members.filter((member) => typeof member === "string") : [];
+              detailMarkup =
+                '<div><strong>Family:</strong> ' +
+                escapeHtml(family) +
+                "</div>" +
+                '<div><strong>Team Captain:</strong> ' +
+                escapeHtml(captain) +
+                "</div>" +
+                '<div><strong>Members:</strong> ' +
+                escapeHtml(members.join(", ")) +
+                "</div>";
+            } else {
+              const participantName = registration && typeof registration.name === "string" ? registration.name : "";
+              detailMarkup =
+                '<div><strong>Family:</strong> ' +
+                escapeHtml(family) +
+                "</div>" +
+                '<div><strong>Name:</strong> ' +
+                escapeHtml(participantName) +
+                "</div>";
+            }
+
+            const cancelButtonMarkup = canCancel
+              ? '<button type="button" class="btn btn-secondary event-inline-button" data-cancel-registration="true" data-registration-id="' +
+                escapeHtml(registrationId) +
+                '" data-event-id="' +
+                escapeHtml(eventId) +
+                '"' +
+                (isPendingCancellation ? ' disabled aria-busy="true"' : "") +
+                ">Cancel Registration</button>"
+              : "";
+
+            return (
+              '<li class="event-registered-item">' +
+              '<div class="event-registered-item__details">' +
+              detailMarkup +
+              "</div>" +
+              (cancelButtonMarkup ? '<div class="event-registered-item__actions">' + cancelButtonMarkup + "</div>" : "") +
+              "</li>"
+            );
+          })
+          .join("");
+
+        participantsPanel.innerHTML =
+          '<h6 class="event-registered-title">Registered Participants</h6>' +
+          '<ul class="event-registered-list">' +
+          participantRows +
+          "</ul>";
+      }
+
       function applyFamilySlotAvailability(form, state) {
         const familySelect = form.elements.namedItem("family");
         if (!(familySelect instanceof HTMLSelectElement)) {
@@ -2122,6 +2329,7 @@
       function refreshEventRegistrationFormState(form, eventId) {
         const state = getCachedEventRegistrationState(eventId);
         renderEventRegistrationStatus(form, eventId, state);
+        renderRegisteredParticipants(form, eventId, state);
 
         if (!state || !state.stats) {
           updateTeamSubmitAvailability(form, null);
@@ -2269,6 +2477,60 @@
         });
       }
 
+      async function cancelEventRegistration(payload) {
+        return fetchJson(eventRegistrationApiBaseUrl + "/cancel", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+      }
+
+      async function cancelOwnedRegistration(form, eventId, registrationId) {
+        if (!form || !eventId || !registrationId || pendingRegistrationCancellationIds.has(registrationId)) {
+          return;
+        }
+
+        pendingRegistrationCancellationIds.add(registrationId);
+        refreshEventRegistrationFormState(form, eventId);
+
+        try {
+          const result = await cancelEventRegistration({
+            eventId,
+            registrationId,
+            ownerToken: getOrCreateRegistrationOwnerToken(),
+          });
+
+          if (!result.ok) {
+            const message = result.payload && typeof result.payload.message === "string" && result.payload.message.trim()
+              ? result.payload.message.trim()
+              : "Unable to cancel registration right now.";
+            setEventFormFeedback(form, message, true);
+            showToast(message);
+            return;
+          }
+
+          const nextState = getRegistrationStatePayload(result.payload);
+          if (nextState && nextState.eventId) {
+            cacheRegistrationState(nextState);
+            syncRegistrationStateToOtherTabs("registration-update", nextState.eventId, nextState);
+          }
+
+          forgetOwnedRegistration(registrationId);
+          setEventFormFeedback(form, "Your registration has been canceled.", false);
+          showToast("Your registration has been canceled.");
+        } catch (error) {
+          console.error("[registration] Could not cancel registration.", error);
+          const message = "Unable to cancel registration right now.";
+          setEventFormFeedback(form, message, true);
+          showToast(message);
+        } finally {
+          pendingRegistrationCancellationIds.delete(registrationId);
+          refreshEventRegistrationFormState(form, eventId);
+        }
+      }
+
       function showSelectedEventDetails(eventId) {
         const details = getEventDetailsById(eventId);
         if (!teaserTitle || !teaserVenue || !teaserMechanics) {
@@ -2327,6 +2589,7 @@
             "</div>" +
             "</div>" +
             '<div class="event-registration-status" data-registration-status="true" aria-live="polite"></div>' +
+            '<div class="event-registered-participants" data-registered-participants="true" aria-live="polite"></div>' +
             '<p class="event-form-feedback" aria-live="polite"></p>' +
             '<div class="registration-actions event-form-actions">' +
             '<button type="submit" class="btn btn-primary">Submit Registration</button>' +
@@ -2357,6 +2620,7 @@
           '<div class="event-members-list">' + buildTeamMemberRowMarkup() + buildTeamMemberRowMarkup() + buildTeamMemberRowMarkup() + "</div>" +
           "</div>" +
           '<div class="event-registration-status" data-registration-status="true" aria-live="polite"></div>' +
+          '<div class="event-registered-participants" data-registered-participants="true" aria-live="polite"></div>' +
           '<p class="event-form-feedback" aria-live="polite"></p>' +
           '<div class="registration-actions event-form-actions">' +
           '<button type="submit" class="btn btn-primary">Submit Team Registration</button>' +
@@ -2459,7 +2723,7 @@
       });
 
       if (teaserModal) {
-        teaserModal.addEventListener("click", (event) => {
+        teaserModal.addEventListener("click", async (event) => {
           const target = event.target;
           if (target instanceof HTMLElement && target.dataset.teaserClose === "true") {
             closeTeaserModal();
@@ -2476,6 +2740,24 @@
             if (selectedEventId) {
               showSelectedEventDetails(selectedEventId);
             }
+            return;
+          }
+
+          const cancelRegistrationButton = target.closest("[data-cancel-registration='true']");
+          if (cancelRegistrationButton instanceof HTMLElement) {
+            const registrationId = cancelRegistrationButton.dataset.registrationId || "";
+            const eventId = cancelRegistrationButton.dataset.eventId || getActiveEventId();
+            const form = cancelRegistrationButton.closest(".event-registration-form");
+            if (!(form instanceof HTMLFormElement) || !registrationId || !eventId) {
+              return;
+            }
+
+            const approved = window.confirm("Are you sure you want to cancel your registration?");
+            if (!approved) {
+              return;
+            }
+
+            await cancelOwnedRegistration(form, eventId, registrationId);
             return;
           }
 
@@ -2614,6 +2896,7 @@
               eventId: activeEventId,
               family: trimmedFamily,
               name: participantName,
+              ownerToken: getOrCreateRegistrationOwnerToken(),
             };
 
             form.dataset.isSubmitting = "true";
@@ -2621,9 +2904,12 @@
             try {
               const result = await submitEventRegistration(payload);
               const nextState = getRegistrationStatePayload(result.payload);
-              cacheRegistrationState(nextState);
 
               if (!result.ok) {
+                if (nextState && nextState.eventId) {
+                  cacheRegistrationState(nextState);
+                }
+
                 const message = result.payload && result.payload.message
                   ? result.payload.message
                   : "Unable to submit registration right now.";
@@ -2632,8 +2918,17 @@
                 return;
               }
 
-              setEventFormFeedback(form, "Registration submitted successfully.", false);
-              showToast("Registration submitted for " + activeEventTitle + ".");
+              if (nextState && nextState.eventId) {
+                cacheRegistrationState(nextState);
+                syncRegistrationStateToOtherTabs("registration-update", nextState.eventId, nextState);
+              }
+
+              if (result.payload && result.payload.registration) {
+                rememberOwnedRegistration(result.payload.registration);
+              }
+
+              setEventFormFeedback(form, "You are successfully registered.", false);
+              showToast("You are successfully registered.");
               form.reset();
             } finally {
               form.dataset.isSubmitting = "false";
@@ -2669,6 +2964,7 @@
               family: trimmedFamily,
               captain,
               members: filledMembers,
+              ownerToken: getOrCreateRegistrationOwnerToken(),
             };
 
             form.dataset.isSubmitting = "true";
@@ -2676,9 +2972,12 @@
             try {
               const result = await submitEventRegistration(payload);
               const nextState = getRegistrationStatePayload(result.payload);
-              cacheRegistrationState(nextState);
 
               if (!result.ok) {
+                if (nextState && nextState.eventId) {
+                  cacheRegistrationState(nextState);
+                }
+
                 const message = result.payload && result.payload.message
                   ? result.payload.message
                   : "Unable to submit team registration right now.";
@@ -2691,8 +2990,17 @@
                 ? result.payload.registration.teamLabel || ""
                 : "";
 
-              setEventFormFeedback(form, "Team registration submitted successfully.", false);
-              showToast(teamLabel ? teamLabel + " registered for " + activeEventTitle + "." : "Team registered for " + activeEventTitle + ".");
+              if (nextState && nextState.eventId) {
+                cacheRegistrationState(nextState);
+                syncRegistrationStateToOtherTabs("registration-update", nextState.eventId, nextState);
+              }
+
+              if (result.payload && result.payload.registration) {
+                rememberOwnedRegistration(result.payload.registration);
+              }
+
+              setEventFormFeedback(form, "You are successfully registered.", false);
+              showToast(teamLabel ? "You are successfully registered. " + teamLabel + " is confirmed." : "You are successfully registered.");
               form.reset();
               const membersList = form.querySelector(".event-members-list");
               if (membersList) {

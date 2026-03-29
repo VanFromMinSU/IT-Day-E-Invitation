@@ -227,6 +227,29 @@ function sanitizeMembers(members) {
     .filter((member) => Boolean(member));
 }
 
+function sanitizeRegistrationOwnerToken(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  const normalized = value.trim();
+  return /^[A-Za-z0-9_:-]{16,180}$/.test(normalized) ? normalized : "";
+}
+
+function hashRegistrationOwnerToken(value) {
+  const normalizedToken = sanitizeRegistrationOwnerToken(value);
+  return normalizedToken ? hashToken(normalizedToken) : "";
+}
+
+function sanitizeRegistrationId(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  const normalized = value.trim();
+  return /^[A-Za-z0-9-]{8,80}$/.test(normalized) ? normalized : "";
+}
+
 function createRegistrationId() {
   return "reg-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
 }
@@ -368,14 +391,45 @@ function buildRegistrationStats(eventId, registrations) {
   return null;
 }
 
-function buildRegistrationState(eventId, reason) {
+function toPublicRegistration(registration, ownerTokenHash) {
+  if (!registration || typeof registration !== "object") {
+    return null;
+  }
+
+  const registrationId = sanitizeRegistrationId(registration.id);
+  if (!registrationId) {
+    return null;
+  }
+
+  return {
+    id: registrationId,
+    eventId: sanitizeEventId(registration.eventId),
+    eventTitle: typeof registration.eventTitle === "string" ? registration.eventTitle : "",
+    registrationType: registration.registrationType === "team" ? "team" : "individual",
+    family: sanitizeFamily(registration.family),
+    name: typeof registration.name === "string" ? registration.name : null,
+    captain: typeof registration.captain === "string" ? registration.captain : null,
+    members: Array.isArray(registration.members) ? registration.members.filter((member) => typeof member === "string") : null,
+    teamLabel: typeof registration.teamLabel === "string" ? registration.teamLabel : null,
+    teamSize: Number.isInteger(registration.teamSize) ? registration.teamSize : null,
+    submittedAt: typeof registration.submittedAt === "string" ? registration.submittedAt : new Date().toISOString(),
+    canCancel: Boolean(ownerTokenHash && registration.ownerTokenHash && registration.ownerTokenHash === ownerTokenHash),
+  };
+}
+
+function buildRegistrationState(eventId, reason, options) {
+  const config = options && typeof options === "object" ? options : {};
+  const ownerTokenHash = typeof config.ownerTokenHash === "string" ? config.ownerTokenHash : "";
   const registrations = getEventRegistrations(eventId);
   const stats = buildRegistrationStats(eventId, registrations);
+  const publicRegistrations = registrations
+    .map((registration) => toPublicRegistration(registration, ownerTokenHash))
+    .filter((registration) => Boolean(registration));
 
   return {
     eventId,
     eventTitle: EVENT_TITLE_MAP[eventId] || eventId,
-    registrations,
+    registrations: publicRegistrations,
     stats,
     updatedAt: store.updatedAt,
     reason: reason || "snapshot",
@@ -682,21 +736,24 @@ app.post("/api/reset-registrations", async (req, res) => {
 
 app.get("/api/event-registrations", (req, res) => {
   const eventId = sanitizeEventId(req.query.eventId);
+  const ownerTokenHash = hashRegistrationOwnerToken(req.query.ownerToken);
 
   if (!isRegistrationEventId(eventId)) {
     res.status(400).json({ error: "invalid_event", message: "Unsupported registration event." });
     return;
   }
 
-  res.json(buildRegistrationState(eventId, "snapshot"));
+  res.json(buildRegistrationState(eventId, "snapshot", { ownerTokenHash }));
 });
 
 app.post("/api/event-registrations", async (req, res) => {
   const eventId = sanitizeEventId(req.body && req.body.eventId);
   const family = sanitizeFamily(req.body && req.body.family);
+  const ownerToken = sanitizeRegistrationOwnerToken(req.body && req.body.ownerToken);
+  const ownerTokenHash = hashRegistrationOwnerToken(ownerToken);
 
-  if (!isRegistrationEventId(eventId) || !family) {
-    res.status(400).json({ error: "invalid_payload", message: "Invalid event or family." });
+  if (!isRegistrationEventId(eventId) || !family || !ownerTokenHash) {
+    res.status(400).json({ error: "invalid_payload", message: "Invalid event, family, or owner token." });
     return;
   }
 
@@ -773,6 +830,7 @@ app.post("/api/event-registrations", async (req, res) => {
           registrationType: "individual",
           family,
           name: participantName,
+          ownerTokenHash,
           submittedAt: new Date().toISOString(),
         };
 
@@ -837,6 +895,7 @@ app.post("/api/event-registrations", async (req, res) => {
           members,
           teamLabel,
           teamSize: TEAM_SIZE,
+          ownerTokenHash,
           submittedAt: new Date().toISOString(),
         };
 
@@ -862,7 +921,7 @@ app.post("/api/event-registrations", async (req, res) => {
     }, "registration:" + eventId);
 
     const status = outcome && Number.isInteger(outcome.status) ? outcome.status : 500;
-    const state = buildRegistrationState(eventId, status === 201 ? "registration" : "validation");
+    const state = buildRegistrationState(eventId, status === 201 ? "registration" : "validation", { ownerTokenHash });
 
     if (status !== 201) {
       res.status(status).json({
@@ -874,14 +933,91 @@ app.post("/api/event-registrations", async (req, res) => {
     }
 
     res.status(201).json({
-      registration: outcome.registration,
+      registration: toPublicRegistration(outcome.registration, ownerTokenHash),
       state,
-      message: "Registration submitted successfully.",
+      message: "You are successfully registered.",
     });
   } catch (error) {
     console.error("Unable to submit event registration:", error);
-    const state = isRegistrationEventId(eventId) ? buildRegistrationState(eventId, "error") : undefined;
+    const state = isRegistrationEventId(eventId)
+      ? buildRegistrationState(eventId, "error", { ownerTokenHash })
+      : undefined;
     res.status(500).json({ error: "internal_error", message: "Unable to process registration.", state });
+  }
+});
+
+app.post("/api/event-registrations/cancel", async (req, res) => {
+  const eventId = sanitizeEventId(req.body && req.body.eventId);
+  const registrationId = sanitizeRegistrationId(req.body && req.body.registrationId);
+  const ownerTokenHash = hashRegistrationOwnerToken(req.body && req.body.ownerToken);
+
+  if (!isRegistrationEventId(eventId) || !registrationId || !ownerTokenHash) {
+    res.status(400).json({ error: "invalid_payload", message: "Invalid event, registration id, or owner token." });
+    return;
+  }
+
+  try {
+    const outcome = await queueMutation(() => {
+      const registrationIndex = store.registrations.findIndex((registration) => {
+        return sanitizeRegistrationId(registration && registration.id) === registrationId
+          && sanitizeEventId(registration && registration.eventId) === eventId;
+      });
+
+      if (registrationIndex < 0) {
+        return {
+          changed: false,
+          data: {
+            status: 404,
+            error: "registration_not_found",
+            message: "Registration not found.",
+          },
+        };
+      }
+
+      const existingRegistration = store.registrations[registrationIndex];
+      if (!existingRegistration.ownerTokenHash || existingRegistration.ownerTokenHash !== ownerTokenHash) {
+        return {
+          changed: false,
+          data: {
+            status: 403,
+            error: "forbidden",
+            message: "You can cancel only your own registration.",
+          },
+        };
+      }
+
+      store.registrations.splice(registrationIndex, 1);
+      return {
+        changed: true,
+        registrationEventId: eventId,
+        data: {
+          status: 200,
+          registrationId,
+        },
+      };
+    }, "registration-cancel:" + eventId);
+
+    const status = outcome && Number.isInteger(outcome.status) ? outcome.status : 500;
+    const state = buildRegistrationState(eventId, status === 200 ? "cancellation" : "validation", { ownerTokenHash });
+
+    if (status !== 200) {
+      res.status(status).json({
+        error: outcome && outcome.error ? outcome.error : "internal_error",
+        message: outcome && outcome.message ? outcome.message : "Unable to cancel registration.",
+        state,
+      });
+      return;
+    }
+
+    res.json({
+      registrationId,
+      state,
+      message: "Your registration has been canceled.",
+    });
+  } catch (error) {
+    console.error("Unable to cancel registration:", error);
+    const state = buildRegistrationState(eventId, "error", { ownerTokenHash });
+    res.status(500).json({ error: "internal_error", message: "Unable to cancel registration.", state });
   }
 });
 
