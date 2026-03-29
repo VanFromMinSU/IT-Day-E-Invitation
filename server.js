@@ -18,12 +18,18 @@ const REGISTRATION_EVENT_IDS = new Set([
   "rubiks-cube-competition",
   "sudoku-game-easy-level",
   "codm-tournament",
+  "fast-typing",
+  "crimping-competition",
+  "assembling-and-disassembling-competition",
 ]);
 const INDIVIDUAL_EVENT_IDS = new Set([
   "rubiks-cube-competition",
   "sudoku-game-easy-level",
+  "fast-typing",
+  "crimping-competition",
+  "assembling-and-disassembling-competition",
 ]);
-const TEAM_EVENT_ID = "codm-tournament";
+const TEAM_EVENT_IDS = new Set(["codm-tournament"]);
 const FAMILY_OPTIONS = ["Family 1 - Claude", "Family 2 - Grok", "Family 3 - Gemini", "Family 4 - Dola"];
 const FAMILY_TEAM_PREFIX = {
   "Family 1 - Claude": "A",
@@ -34,13 +40,44 @@ const FAMILY_TEAM_PREFIX = {
 const MAX_PARTICIPANTS_PER_FAMILY = 2;
 const MAX_PARTICIPANTS_PER_EVENT = 8;
 const MAX_TEAMS_PER_FAMILY = 2;
-const TEAM_SIZE = 4;
 const MAX_TEAMS_PER_EVENT = FAMILY_OPTIONS.length * MAX_TEAMS_PER_FAMILY;
 const EVENT_TITLE_MAP = {
   "rubiks-cube-competition": "Rubik's Cube Competition",
   "sudoku-game-easy-level": "Sudoku Game (Easy Level)",
   "codm-tournament": "Call of Duty: Mobile (CODM) Tournament",
+  "fast-typing": "Fast Typing Competition",
+  "crimping-competition": "Crimping Competition",
+  "assembling-and-disassembling-competition": "Assembling and Disassembling Competition",
 };
+
+function getIndividualRegistrationConfig(eventId) {
+  if (eventId === "fast-typing") {
+    return {
+      familyLimit: 3,
+      maxParticipants: FAMILY_OPTIONS.length * 3,
+    };
+  }
+
+  if (eventId === "assembling-and-disassembling-competition") {
+    return {
+      familyLimit: 1,
+      maxParticipants: FAMILY_OPTIONS.length,
+    };
+  }
+
+  return {
+    familyLimit: MAX_PARTICIPANTS_PER_FAMILY,
+    maxParticipants: MAX_PARTICIPANTS_PER_EVENT,
+  };
+}
+
+function getTeamRegistrationConfig(eventId) {
+  return {
+    requiresExactMembers: true,
+    maxMembers: 3,
+    maxTotalParticipants: 4,
+  };
+}
 
 function normalizeAdminTokenHash(value) {
   if (typeof value !== "string") {
@@ -277,6 +314,10 @@ function getEventRegistrations(eventId) {
 }
 
 function getRegistrationFamilyLimitMessage(eventId) {
+  if (eventId === "assembling-and-disassembling-competition") {
+    return "Only one participant is allowed per family for this event.";
+  }
+
   if (eventId === "sudoku-game-easy-level") {
     return "This family already has 2 participants registered.";
   }
@@ -289,18 +330,19 @@ function getTeamLimitMessage() {
 }
 
 function getRegistrationClosedMessage(eventId) {
-  if (eventId === TEAM_EVENT_ID) {
+  if (TEAM_EVENT_IDS.has(eventId)) {
     return "Registration is now closed. Maximum teams reached.";
   }
 
   return "Registration is now closed. Maximum participants reached.";
 }
 
-function getTeamSizeMessage() {
+function getTeamSizeMessage(eventId) {
   return "Each team must have exactly 4 members including the Team Captain/Leader.";
 }
 
 function buildIndividualStats(eventId, registrations) {
+  const individualConfig = getIndividualRegistrationConfig(eventId);
   const familyCounter = buildEmptyFamilyCounter();
 
   for (let i = 0; i < registrations.length; i += 1) {
@@ -317,21 +359,21 @@ function buildIndividualStats(eventId, registrations) {
     return {
       family,
       count,
-      limit: MAX_PARTICIPANTS_PER_FAMILY,
-      remaining: Math.max(0, MAX_PARTICIPANTS_PER_FAMILY - count),
+      limit: individualConfig.familyLimit,
+      remaining: Math.max(0, individualConfig.familyLimit - count),
     };
   });
 
   const allFamiliesComplete = eventId === "sudoku-game-easy-level"
-    ? perFamily.every((entry) => entry.count === MAX_PARTICIPANTS_PER_FAMILY)
+    ? perFamily.every((entry) => entry.count === individualConfig.familyLimit)
     : undefined;
 
   return {
     mode: "individual",
     totalParticipants,
-    maxParticipants: MAX_PARTICIPANTS_PER_EVENT,
-    remainingParticipants: Math.max(0, MAX_PARTICIPANTS_PER_EVENT - totalParticipants),
-    isClosed: totalParticipants >= MAX_PARTICIPANTS_PER_EVENT,
+    maxParticipants: individualConfig.maxParticipants,
+    remainingParticipants: Math.max(0, individualConfig.maxParticipants - totalParticipants),
+    isClosed: totalParticipants >= individualConfig.maxParticipants,
     perFamily,
     allFamiliesComplete,
   };
@@ -384,7 +426,7 @@ function buildRegistrationStats(eventId, registrations) {
     return buildIndividualStats(eventId, registrations);
   }
 
-  if (eventId === TEAM_EVENT_ID) {
+  if (TEAM_EVENT_IDS.has(eventId)) {
     return buildTeamStats(registrations);
   }
 
@@ -800,7 +842,9 @@ app.post("/api/event-registrations", async (req, res) => {
       }
 
       if (INDIVIDUAL_EVENT_IDS.has(eventId)) {
-        if (familyEntry.count >= MAX_PARTICIPANTS_PER_FAMILY) {
+        const individualConfig = getIndividualRegistrationConfig(eventId);
+
+        if (familyEntry.count >= individualConfig.familyLimit) {
           return {
             changed: false,
             data: {
@@ -845,7 +889,7 @@ app.post("/api/event-registrations", async (req, res) => {
         };
       }
 
-      if (eventId === TEAM_EVENT_ID) {
+      if (TEAM_EVENT_IDS.has(eventId)) {
         if (familyEntry.count >= MAX_TEAMS_PER_FAMILY) {
           return {
             changed: false,
@@ -859,6 +903,7 @@ app.post("/api/event-registrations", async (req, res) => {
 
         const captain = sanitizePersonName(req.body && req.body.captain);
         const members = sanitizeMembers(req.body && req.body.members);
+        const teamConfig = getTeamRegistrationConfig(eventId);
 
         if (!captain) {
           return {
@@ -871,13 +916,24 @@ app.post("/api/event-registrations", async (req, res) => {
           };
         }
 
-        if (members.length !== TEAM_SIZE - 1) {
+        if (teamConfig.requiresExactMembers && members.length !== teamConfig.maxMembers) {
           return {
             changed: false,
             data: {
               status: 400,
               error: "invalid_team_size",
-              message: getTeamSizeMessage(),
+              message: getTeamSizeMessage(eventId),
+            },
+          };
+        }
+
+        if (!teamConfig.requiresExactMembers && members.length > teamConfig.maxMembers) {
+          return {
+            changed: false,
+            data: {
+              status: 400,
+              error: "invalid_team_size",
+              message: getTeamSizeMessage(eventId),
             },
           };
         }
@@ -894,7 +950,7 @@ app.post("/api/event-registrations", async (req, res) => {
           captain,
           members,
           teamLabel,
-          teamSize: TEAM_SIZE,
+          teamSize: 1 + members.length,
           ownerTokenHash,
           submittedAt: new Date().toISOString(),
         };

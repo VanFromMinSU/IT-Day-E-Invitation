@@ -63,7 +63,7 @@
           },
         })
         : null;
-      const registrationEventIds = new Set(["rubiks-cube-competition", "sudoku-game-easy-level", "codm-tournament"]);
+      const registrationEventIds = new Set(["rubiks-cube-competition", "sudoku-game-easy-level", "codm-tournament", "fast-typing", "crimping-competition", "assembling-and-disassembling-competition"]);
       let isAdminAuthorized = false;
       let isAdminModeRequested = false;
       let isAdminTokenAuthorized = false;
@@ -107,6 +107,8 @@
           eventIds: [
             "it-quiz-bee",
             "fast-typing",
+            "crimping-competition",
+            "assembling-and-disassembling-competition",
             "family-booth",
             "parlor-games",
             "programming-java",
@@ -137,7 +139,9 @@
         "parade-brass-band": "Parade (with Brass Band)",
         "opening-ceremony": "Opening Ceremony",
         "it-quiz-bee": "IT Quiz Bee",
-        "fast-typing": "Fast Typing",
+        "fast-typing": "Fast Typing Competition",
+        "crimping-competition": "Crimping Competition",
+        "assembling-and-disassembling-competition": "Assembling and Disassembling Competition",
         "family-booth": "Family Booth",
         "parlor-games": "Parlor Games",
         "programming-java": "Programming Competition - Java",
@@ -157,6 +161,113 @@
       };
 
       const eventCatalog = {
+        "assembling-and-disassembling-competition": {
+          eventId: "assembling-and-disassembling-competition",
+          title: "Assembling and Disassembling Competition",
+          venue: "ELECTRONICS LAB / 2F3",
+          registrationType: "individual",
+          mechanicsHtml:
+            '<h5>Participants</h5>' +
+            '<ol>' +
+            '<li>All IT Society members (MinSU Main Campus).</li>' +
+            '<li>Maximum of one (1) participant per team/family.</li>' +
+            '<li>Participants must be registered.</li>' +
+            '</ol>' +
+            '<h5>Format</h5>' +
+            '<ol>' +
+            '<li>Two rounds: Disassembling and Assembling.</li>' +
+            '<li>Each participant uses their own timer.</li>' +
+            '<li>Participants must finish disassembly before assembly.</li>' +
+            '<li>In case of a tie, the most safely assembled PC wins.</li>' +
+            '</ol>' +
+            '<h5>Disassembly Round</h5>' +
+            '<ul>' +
+            '<li>Disassemble the system unit.</li>' +
+            '<li>Same model is used for all participants.</li>' +
+            '<li>Judged by speed and accuracy.</li>' +
+            '<li>Participants must avoid damage.</li>' +
+            '</ul>' +
+            '<h5>Assembly Round</h5>' +
+            '<ul>' +
+            '<li>Reassemble the system.</li>' +
+            '<li>System must be fully functional.</li>' +
+            '<li>Judged by speed and accuracy.</li>' +
+            '<li>Winner is based on the shortest combined time.</li>' +
+            '</ul>' +
+            '<h5>Rules</h5>' +
+            '<ul>' +
+            '<li>Follow safety protocols.</li>' +
+            '<li>Use provided tools only.</li>' +
+            '<li>No cheating or sabotage.</li>' +
+            '<li>False pause incurs a +5 seconds penalty.</li>' +
+            '<li>Judges\' decision is final.</li>' +
+            '</ul>',
+        },
+        "crimping-competition": {
+          eventId: "crimping-competition",
+          title: "Crimping Competition",
+          venue: "COM LABORATORY 1",
+          registrationType: "individual",
+          mechanicsHtml:
+            '<h5>Guidelines</h5>' +
+            '<ol>' +
+            '<li>Each family shall have a maximum of two (2) participants.</li>' +
+            '<li>Each participant is provided with RJ45 connectors, ethernet cables, crimping tools, and network testers.</li>' +
+            '<li>The participants should correctly crimp RJ45 connectors onto Ethernet cables.</li>' +
+            '<li>Participants must use provided tools only.</li>' +
+            '<li>Must follow standard RJ45 specifications.</li>' +
+            '<li>Judges inspect alignment, order, and attachment. Final decision is irrevocable.</li>' +
+            '<li>Fastest correct output wins.</li>' +
+            '<li>Late by 15 minutes results in disqualification.</li>' +
+            '</ol>',
+        },
+        "fast-typing": {
+          eventId: "fast-typing",
+          title: "Fast Typing Competition",
+          venue: "COM LABORATORY 1",
+          registrationType: "individual",
+          mechanicsHtml:
+            '<h5>Challenge Format</h5>' +
+            '<ol>' +
+            '<li>The contest consists of 3 stages: Easy, Average, and Hard.</li>' +
+            '<li>Easy stage includes 3-5 sentences to type.</li>' +
+            '<li>Average stage includes 1 whole paragraph to type.</li>' +
+            '<li>Hard stage includes a series of paragraphs to type.</li>' +
+            '<li>Participants have 2 hours to complete the contest.</li>' +
+            '</ol>' +
+            '<h5>Participants</h5>' +
+            '<ol>' +
+            '<li>Each family can register up to three (3) participants.</li>' +
+            '<li>The deadline for participant registration is 1 hour before the competition.</li>' +
+            '<li>One (1) watcher from each team will monitor the entire competition.</li>' +
+            '</ol>' +
+            '<h5>Point System</h5>' +
+            '<ol>' +
+            '<li>Scores are determined by the official WPM and accuracy results displayed by typer.io at the end of each round.</li>' +
+            '<li>The total score is a combination of all three rounds.</li>' +
+            '</ol>' +
+            '<ul>' +
+            '<li>Round 1: First - 20, Second - 15, Third - 10</li>' +
+            '<li>Round 2: First - 30, Second - 25, Third - 20</li>' +
+            '<li>Round 3: First - 50, Second - 40, Third - 30</li>' +
+            '</ul>' +
+            '<ol start="3">' +
+            '<li>The maximum possible score is 100 points.</li>' +
+            '<li>In the case of a tie, a sudden death typing round will determine the winner.</li>' +
+            '</ol>' +
+            '<h5>Allowed</h5>' +
+            '<ol>' +
+            '<li>Participants must bring their own laptops, which will be checked by the facilitator.</li>' +
+            '<li>Only the typer.io tab should remain open during the competition. Typing can only begin when instructed.</li>' +
+            '</ol>' +
+            '<h5>Disqualification</h5>' +
+            '<ol>' +
+            '<li>Switching tabs more than 2 times results in disqualification.</li>' +
+            '<li>Using the internet or unrelated apps is prohibited.</li>' +
+            '<li>Auto-typers/macros/scripts result in disqualification.</li>' +
+            '<li>Using pre-written passages results in disqualification.</li>' +
+            '</ol>',
+        },
         "rubiks-cube-competition": {
           eventId: "rubiks-cube-competition",
           title: "Rubik's Cube Competition",
@@ -1928,6 +2039,14 @@
           return "fast-typing";
         }
 
+        if (combined.includes("crimping")) {
+          return "crimping-competition";
+        }
+
+        if (combined.includes("assembling") || combined.includes("disassembling")) {
+          return "assembling-and-disassembling-competition";
+        }
+
         if (combined.includes("mobile legends")) {
           return "mobile-legends-tournament";
         }
@@ -1978,7 +2097,7 @@
           return "grand-opening";
         }
 
-        if (combined.includes("academic") || combined.includes("coding") || combined.includes("programming") || combined.includes("quiz") || combined.includes("typing")) {
+        if (combined.includes("academic") || combined.includes("coding") || combined.includes("programming") || combined.includes("quiz") || combined.includes("typing") || combined.includes("crimp") || combined.includes("assembling") || combined.includes("disassembling")) {
           return "academic-coding";
         }
 
@@ -2118,6 +2237,10 @@
       }
 
       function getFamilyLimitValidationMessage(eventId) {
+        if (eventId === "assembling-and-disassembling-competition") {
+          return "Only one participant is allowed per family for this event.";
+        }
+
         if (eventId === "sudoku-game-easy-level") {
           return "This family already has 2 participants registered.";
         }
@@ -2129,8 +2252,20 @@
         return "This family has already registered the maximum number of teams.";
       }
 
-      function getTeamSizeValidationMessage() {
-        return "Each team must have exactly 4 members including the Team Captain/Leader.";
+      function getTeamRegistrationRules(eventId) {
+        return {
+          maxMembers: 3,
+          defaultMemberRows: 3,
+          requireCompleteMemberFields: true,
+          requiresExactMembers: true,
+          exactMembers: 3,
+          maxTotalParticipants: 4,
+          sizeMessage: "Each team must have exactly 4 members including the Team Captain/Leader.",
+        };
+      }
+
+      function getTeamSizeValidationMessage(eventId) {
+        return getTeamRegistrationRules(eventId).sizeMessage;
       }
 
       async function fetchEventRegistrationState(eventId) {
@@ -2255,6 +2390,8 @@
         }
 
         if (stats.mode === "team") {
+          const teamRules = getTeamRegistrationRules(eventId);
+
           if (typeof stats.remainingTeams === "number" && typeof stats.maxTeams === "number") {
             lines.push("Total remaining team slots: " + stats.remainingTeams + " / " + stats.maxTeams + ".");
           }
@@ -2267,8 +2404,8 @@
 
           const teamState = getCurrentTeamMemberState(form);
           const currentTotal = (teamState.captain ? 1 : 0) + teamState.filledMembers.length;
-          lines.push("Current team size entered: " + currentTotal + "/4.");
-          lines.push("Each team must have exactly 4 members including the Team Captain/Leader.");
+          lines.push("Current team size entered: " + currentTotal + "/" + teamRules.maxTotalParticipants + ".");
+          lines.push(getTeamSizeValidationMessage(eventId));
 
           if (Array.isArray(stats.teams) && stats.teams.length > 0) {
             const teamLabels = stats.teams.map((team) => team.teamLabel).filter((teamLabel) => Boolean(teamLabel));
@@ -2468,7 +2605,7 @@
         setFormControlsDisabled(form, isSubmitting);
       }
 
-      function updateTeamSubmitAvailability(form, state) {
+      function updateTeamSubmitAvailability(form, state, eventId) {
         const submitButton = form.querySelector('button[type="submit"]');
         if (!(submitButton instanceof HTMLButtonElement)) {
           return;
@@ -2484,9 +2621,21 @@
           return;
         }
 
+        const teamRules = getTeamRegistrationRules(eventId);
         const teamState = getCurrentTeamMemberState(form);
         const hasEmptyMemberSlot = teamState.members.some((member) => member.length === 0);
-        submitButton.disabled = !teamState.captain || hasEmptyMemberSlot || teamState.filledMembers.length !== 3;
+
+        if (teamRules.requireCompleteMemberFields && hasEmptyMemberSlot) {
+          submitButton.disabled = true;
+          return;
+        }
+
+        if (teamRules.requiresExactMembers) {
+          submitButton.disabled = !teamState.captain || teamState.filledMembers.length !== teamRules.exactMembers;
+          return;
+        }
+
+        submitButton.disabled = !teamState.captain || teamState.filledMembers.length > teamRules.maxMembers;
       }
 
       function refreshEventRegistrationFormState(form, eventId) {
@@ -2495,7 +2644,7 @@
         renderRegisteredParticipants(form, eventId, state);
 
         if (!state || !state.stats) {
-          updateTeamSubmitAvailability(form, null);
+          updateTeamSubmitAvailability(form, null, eventId);
           return;
         }
 
@@ -2508,7 +2657,7 @@
           applyFamilySlotAvailability(form, state);
         }
 
-        updateTeamSubmitAvailability(form, state);
+        updateTeamSubmitAvailability(form, state, eventId);
 
         if (isClosed) {
           setEventFormFeedback(form, getRegistrationClosedValidationMessage(eventId), true);
@@ -2730,13 +2879,25 @@
           .join("");
       }
 
-      function buildTeamMemberRowMarkup() {
+      function buildTeamMemberRowMarkup(isRequired) {
+        const requiredAttribute = isRequired ? " required" : "";
+
         return (
           '<div class="event-member-row">' +
-          '<input name="members[]" type="text" placeholder="Member name" required />' +
+          '<input name="members[]" type="text" placeholder="Member name"' + requiredAttribute + ' />' +
           '<button type="button" class="event-member-remove" data-remove-member="true" aria-label="Remove member">Remove</button>' +
           "</div>"
         );
+      }
+
+      function buildTeamMemberRowsMarkup(count, isRequired) {
+        let markup = "";
+
+        for (let i = 0; i < count; i += 1) {
+          markup += buildTeamMemberRowMarkup(isRequired);
+        }
+
+        return markup;
       }
 
       function renderEventRegistration(details) {
@@ -2774,6 +2935,9 @@
           return;
         }
 
+        const teamRules = getTeamRegistrationRules(details.eventId);
+        const membersHeading = "Members";
+
         teaserRegistration.innerHTML =
           '<form class="event-registration-form" data-registration-type="team" novalidate>' +
           '<div class="event-form-grid">' +
@@ -2790,10 +2954,10 @@
           "</div>" +
           '<div class="event-members-wrap">' +
           '<div class="event-members-header">' +
-          "<strong>Members</strong>" +
+          "<strong>" + escapeHtml(membersHeading) + "</strong>" +
           '<button type="button" class="btn btn-secondary event-inline-button" data-add-member="true">Add Member</button>' +
           "</div>" +
-          '<div class="event-members-list">' + buildTeamMemberRowMarkup() + buildTeamMemberRowMarkup() + buildTeamMemberRowMarkup() + "</div>" +
+          '<div class="event-members-list">' + buildTeamMemberRowsMarkup(teamRules.defaultMemberRows, teamRules.requireCompleteMemberFields) + "</div>" +
           "</div>" +
           '<div class="event-registration-status" data-registration-status="true" aria-live="polite"></div>' +
           '<div class="event-registered-participants" data-registered-participants="true" aria-live="polite"></div>' +
@@ -2804,20 +2968,21 @@
           "</form>";
       }
 
-      function addTeamMemberRow(membersList) {
+      function addTeamMemberRow(membersList, isRequired) {
+        const requiredAttribute = isRequired ? " required" : "";
         const memberRow = document.createElement("div");
         memberRow.className = "event-member-row";
         memberRow.innerHTML =
-          '<input name="members[]" type="text" placeholder="Member name" required />' +
+          '<input name="members[]" type="text" placeholder="Member name"' + requiredAttribute + ' />' +
           '<button type="button" class="event-member-remove" data-remove-member="true" aria-label="Remove member">Remove</button>';
         membersList.appendChild(memberRow);
       }
 
-      function resetTeamMembers(membersList, count) {
+      function resetTeamMembers(membersList, count, isRequired) {
         membersList.innerHTML = "";
 
         for (let i = 0; i < count; i += 1) {
-          addTeamMemberRow(membersList);
+          addTeamMemberRow(membersList, isRequired);
         }
       }
 
@@ -2942,16 +3107,17 @@
             const form = addMemberButton.closest(".event-registration-form");
             const membersList = form ? form.querySelector(".event-members-list") : null;
             if (membersList) {
+              const activeEventId = getActiveEventId();
+              const teamRules = getTeamRegistrationRules(activeEventId);
               const rows = membersList.querySelectorAll(".event-member-row");
-              if (rows.length >= 3) {
+              if (rows.length >= teamRules.maxMembers) {
                 if (form instanceof HTMLFormElement) {
-                  setEventFormFeedback(form, getTeamSizeValidationMessage(), true);
+                  setEventFormFeedback(form, getTeamSizeValidationMessage(activeEventId), true);
                 }
                 return;
               }
 
-              addTeamMemberRow(membersList);
-              const activeEventId = getActiveEventId();
+              addTeamMemberRow(membersList, teamRules.requireCompleteMemberFields);
               if (form instanceof HTMLFormElement && activeEventId) {
                 refreshEventRegistrationFormState(form, activeEventId);
               }
@@ -3046,7 +3212,7 @@
           if (latestState && latestState.stats && Array.isArray(latestState.stats.perFamily)) {
             const familyEntry = latestState.stats.perFamily.find((entry) => entry.family === trimmedFamily);
 
-            if (registrationType === "individual" && familyEntry && familyEntry.count >= 2) {
+            if (registrationType === "individual" && familyEntry && familyEntry.count >= (typeof familyEntry.limit === "number" ? familyEntry.limit : 2)) {
               setEventFormFeedback(form, getFamilyLimitValidationMessage(activeEventId), true);
               refreshEventRegistrationFormState(form, activeEventId);
               return;
@@ -3121,6 +3287,7 @@
 
           if (registrationType === "team") {
             const teamState = getCurrentTeamMemberState(form);
+            const teamRules = getTeamRegistrationRules(activeEventId);
             const captain = teamState.captain;
             const members = teamState.members;
             const filledMembers = teamState.filledMembers;
@@ -3130,13 +3297,18 @@
               return;
             }
 
-            if (members.some((member) => member.length === 0)) {
+            if (teamRules.requireCompleteMemberFields && members.some((member) => member.length === 0)) {
               setEventFormFeedback(form, "Please complete all team member fields or remove extras.", true);
               return;
             }
 
-            if (filledMembers.length !== 3) {
-              setEventFormFeedback(form, getTeamSizeValidationMessage(), true);
+            if (teamRules.requiresExactMembers && filledMembers.length !== teamRules.exactMembers) {
+              setEventFormFeedback(form, getTeamSizeValidationMessage(activeEventId), true);
+              return;
+            }
+
+            if (!teamRules.requiresExactMembers && filledMembers.length > teamRules.maxMembers) {
+              setEventFormFeedback(form, getTeamSizeValidationMessage(activeEventId), true);
               return;
             }
 
@@ -3189,7 +3361,7 @@
               form.reset();
               const membersList = form.querySelector(".event-members-list");
               if (membersList) {
-                resetTeamMembers(membersList, 3);
+                resetTeamMembers(membersList, teamRules.defaultMemberRows, teamRules.requireCompleteMemberFields);
               }
             } finally {
               form.dataset.isSubmitting = "false";
