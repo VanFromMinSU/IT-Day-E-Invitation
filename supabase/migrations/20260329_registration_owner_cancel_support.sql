@@ -1,15 +1,15 @@
-create extension if not exists pgcrypto;
-
 alter table public.event_registrations
   add column if not exists owner_token_hash text;
 
 update public.event_registrations
-set owner_token_hash = encode(
-  digest(id::text || coalesce(submitted_at::text, ''), 'sha256'),
-  'hex'
+set owner_token_hash = lower(
+  md5(id::text || coalesce(submitted_at::text, ''))
+  ||
+  md5(coalesce(submitted_at::text, '') || id::text)
 )
 where owner_token_hash is null
-   or btrim(owner_token_hash) = '';
+  or btrim(owner_token_hash) = ''
+  or btrim(owner_token_hash) !~ '^[A-Fa-f0-9]{64}$';
 
 alter table public.event_registrations
   alter column owner_token_hash set not null;
@@ -35,8 +35,8 @@ language sql
 immutable
 as $$
   select case
-    when btrim(coalesce(p_owner_token, '')) ~ '^[A-Za-z0-9_:-]{16,180}$'
-      then encode(digest(btrim(p_owner_token), 'sha256'), 'hex')
+    when btrim(coalesce(p_owner_token, '')) ~ '^[A-Fa-f0-9]{64}$'
+      then lower(btrim(p_owner_token))
     else ''
   end;
 $$;

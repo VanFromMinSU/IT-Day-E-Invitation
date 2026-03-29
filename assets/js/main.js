@@ -81,6 +81,8 @@
       let responseCounts = { interested: 0, excited: 0 };
       const registrationStateByEventId = {};
       let ownedRegistrationLookup = loadOwnedRegistrationLookup();
+      let registrationOwnerTokenHashCache = "";
+      let registrationOwnerTokenHashCacheToken = "";
       const pendingRegistrationCancellationIds = new Set();
       let hasSubmittedResponse = false;
       let submittedResponseType = "";
@@ -497,6 +499,11 @@
         return /^[A-Za-z0-9_:-]{16,180}$/.test(normalizedValue) ? normalizedValue : "";
       }
 
+      function normalizeSha256Hash(value) {
+        const normalizedValue = typeof value === "string" ? value.trim().toLowerCase() : "";
+        return /^[a-f0-9]{64}$/.test(normalizedValue) ? normalizedValue : "";
+      }
+
       function getOrCreateRegistrationOwnerToken() {
         let existingToken = "";
 
@@ -521,6 +528,30 @@
         }
 
         return generatedToken;
+      }
+
+      async function getRegistrationOwnerTokenHash(ownerToken) {
+        const normalizedOwnerToken = normalizeRegistrationOwnerToken(ownerToken);
+        if (!normalizedOwnerToken) {
+          return "";
+        }
+
+        if (
+          registrationOwnerTokenHashCache
+          && registrationOwnerTokenHashCacheToken
+          && registrationOwnerTokenHashCacheToken === normalizedOwnerToken
+        ) {
+          return registrationOwnerTokenHashCache;
+        }
+
+        const nextHash = normalizeSha256Hash(await hashStringSha256(normalizedOwnerToken));
+        if (!nextHash) {
+          return "";
+        }
+
+        registrationOwnerTokenHashCacheToken = normalizedOwnerToken;
+        registrationOwnerTokenHashCache = nextHash;
+        return nextHash;
       }
 
       function loadOwnedRegistrationLookup() {
@@ -1102,28 +1133,34 @@
         }
 
         if (requestUrl.pathname === eventRegistrationApiPathname && method === "GET") {
+          const requestOwnerTokenHash = requestUrl.searchParams.get("ownerTokenHash") || "";
+          const requestOwnerToken = requestUrl.searchParams.get("ownerToken") || "";
           return callBackendWithFallback("get_registration_state", {
             p_event_id: requestUrl.searchParams.get("eventId") || "",
-            p_owner_token: requestUrl.searchParams.get("ownerToken") || "",
+            p_owner_token: requestOwnerTokenHash || requestOwnerToken,
           }, requestUrl, requestOptions);
         }
 
         if (requestUrl.pathname === eventRegistrationApiPathname && method === "POST") {
+          const requestOwnerTokenHash = body && typeof body.ownerTokenHash === "string" ? body.ownerTokenHash : "";
+          const requestOwnerToken = body && typeof body.ownerToken === "string" ? body.ownerToken : "";
           return callBackendWithFallback("submit_event_registration", {
             p_event_id: body && typeof body.eventId === "string" ? body.eventId : "",
             p_family: body && typeof body.family === "string" ? body.family : "",
             p_name: body && typeof body.name === "string" ? body.name : null,
             p_captain: body && typeof body.captain === "string" ? body.captain : null,
             p_members: body && Array.isArray(body.members) ? body.members : null,
-            p_owner_token: body && typeof body.ownerToken === "string" ? body.ownerToken : "",
+            p_owner_token: requestOwnerTokenHash || requestOwnerToken,
           }, requestUrl, requestOptions);
         }
 
         if (requestUrl.pathname === eventRegistrationApiPathname + "/cancel" && method === "POST") {
+          const requestOwnerTokenHash = body && typeof body.ownerTokenHash === "string" ? body.ownerTokenHash : "";
+          const requestOwnerToken = body && typeof body.ownerToken === "string" ? body.ownerToken : "";
           return callBackendWithFallback("cancel_event_registration", {
             p_registration_id: body && typeof body.registrationId === "string" ? body.registrationId : "",
             p_event_id: body && typeof body.eventId === "string" ? body.eventId : "",
-            p_owner_token: body && typeof body.ownerToken === "string" ? body.ownerToken : "",
+            p_owner_token: requestOwnerTokenHash || requestOwnerToken,
           }, requestUrl, requestOptions);
         }
 
@@ -1490,7 +1527,7 @@
 
           return hashHex;
         } catch (error) {
-          console.error("[admin] Unable to hash admin token.", error);
+          console.error("[crypto] Unable to compute SHA-256 hash.", error);
           return "";
         }
       }
@@ -2049,12 +2086,15 @@
 
       async function fetchEventRegistrationState(eventId) {
         const ownerToken = getOrCreateRegistrationOwnerToken();
+        const ownerTokenHash = await getRegistrationOwnerTokenHash(ownerToken);
         const requestUrl =
           eventRegistrationApiBaseUrl +
           "?eventId=" +
           encodeURIComponent(eventId) +
           "&ownerToken=" +
-          encodeURIComponent(ownerToken);
+          encodeURIComponent(ownerToken) +
+          "&ownerTokenHash=" +
+          encodeURIComponent(ownerTokenHash);
         const result = await fetchJson(requestUrl, { cache: "no-store" });
 
         if (!result.ok) {
@@ -2213,65 +2253,131 @@
           return;
         }
 
-        const participantRows = registrations
-          .map((registration) => {
-            const registrationId = registration && typeof registration.id === "string" ? registration.id : "";
-            const family = registration && typeof registration.family === "string" ? registration.family : "";
-            const registrationType = registration && typeof registration.registrationType === "string" ? registration.registrationType : "individual";
-            const canCancel = isOwnedRegistration(registration);
-            const isPendingCancellation = registrationId && pendingRegistrationCancellationIds.has(registrationId);
+        const groupedByFamily = {};
+        const orderedFamilyKeys = familyOptions.slice();
 
-            let detailMarkup = "";
-            if (registrationType === "team") {
-              const captain = registration && typeof registration.captain === "string" ? registration.captain : "";
-              const members = registration && Array.isArray(registration.members) ? registration.members.filter((member) => typeof member === "string") : [];
-              detailMarkup =
-                '<div><strong>Family:</strong> ' +
-                escapeHtml(family) +
-                "</div>" +
-                '<div><strong>Team Captain:</strong> ' +
-                escapeHtml(captain) +
-                "</div>" +
-                '<div><strong>Members:</strong> ' +
-                escapeHtml(members.join(", ")) +
-                "</div>";
-            } else {
-              const participantName = registration && typeof registration.name === "string" ? registration.name : "";
-              detailMarkup =
-                '<div><strong>Family:</strong> ' +
-                escapeHtml(family) +
-                "</div>" +
-                '<div><strong>Name:</strong> ' +
-                escapeHtml(participantName) +
-                "</div>";
+        registrations.forEach((registration) => {
+          const family = registration && typeof registration.family === "string" ? registration.family : "";
+          const familyKey = family || "Unassigned";
+
+          if (!groupedByFamily[familyKey]) {
+            groupedByFamily[familyKey] = [];
+          }
+
+          groupedByFamily[familyKey].push(registration);
+
+          if (orderedFamilyKeys.indexOf(familyKey) === -1) {
+            orderedFamilyKeys.push(familyKey);
+          }
+        });
+
+        function buildCancelButtonMarkup(registration, fallbackEventId) {
+          const registrationId = registration && typeof registration.id === "string" ? registration.id : "";
+          const registrationEventId = registration && typeof registration.eventId === "string" ? registration.eventId : fallbackEventId;
+          const canCancel = isOwnedRegistration(registration);
+          const isPendingCancellation = registrationId && pendingRegistrationCancellationIds.has(registrationId);
+
+          if (!canCancel || !registrationId) {
+            return "";
+          }
+
+          return (
+            '<button type="button" class="btn btn-secondary event-inline-button" data-cancel-registration="true" data-registration-id="' +
+            escapeHtml(registrationId) +
+            '" data-event-id="' +
+            escapeHtml(registrationEventId || fallbackEventId) +
+            '"' +
+            (isPendingCancellation ? ' disabled aria-busy="true"' : "") +
+            ">Cancel Registration</button>"
+          );
+        }
+
+        const familySectionsMarkup = orderedFamilyKeys
+          .map((familyKey) => {
+            const familyRegistrations = groupedByFamily[familyKey] || [];
+            if (familyRegistrations.length === 0) {
+              return "";
             }
 
-            const cancelButtonMarkup = canCancel
-              ? '<button type="button" class="btn btn-secondary event-inline-button" data-cancel-registration="true" data-registration-id="' +
-                escapeHtml(registrationId) +
-                '" data-event-id="' +
-                escapeHtml(eventId) +
-                '"' +
-                (isPendingCancellation ? ' disabled aria-busy="true"' : "") +
-                ">Cancel Registration</button>"
-              : "";
+            const registrationType = familyRegistrations[0] && familyRegistrations[0].registrationType === "team"
+              ? "team"
+              : "individual";
+
+            let entriesMarkup = "";
+
+            if (registrationType === "team") {
+              entriesMarkup = familyRegistrations
+                .map((registration) => {
+                  const captain = registration && typeof registration.captain === "string" ? registration.captain : "";
+                  const members = registration && Array.isArray(registration.members)
+                    ? registration.members.filter((member) => typeof member === "string")
+                    : [];
+                  const teamLabel = registration && typeof registration.teamLabel === "string" && registration.teamLabel.trim()
+                    ? registration.teamLabel.trim()
+                    : "Team";
+                  const cancelButtonMarkup = buildCancelButtonMarkup(registration, eventId);
+                  const teamRoster = [captain].concat(members).filter((member) => Boolean(member));
+                  const teamRosterMarkup = teamRoster.length > 0
+                    ? teamRoster
+                      .map((member) => '<li class="event-registered-team-member">' + escapeHtml(member) + "</li>")
+                      .join("")
+                    : '<li class="event-registered-team-member">No members listed.</li>';
+
+                  return (
+                    '<li class="event-registered-team">' +
+                    '<div class="event-registered-team__header">' +
+                    '<span class="event-registered-team__title">' +
+                    escapeHtml(teamLabel) +
+                    " (Captain: " +
+                    escapeHtml(captain || "TBA") +
+                    ")</span>" +
+                    (cancelButtonMarkup ? '<span class="event-registered-entry-actions">' + cancelButtonMarkup + "</span>" : "") +
+                    "</div>" +
+                    '<ul class="event-registered-team__members">' +
+                    teamRosterMarkup +
+                    "</ul>" +
+                    "</li>"
+                  );
+                })
+                .join("");
+
+              return (
+                '<section class="event-registered-family">' +
+                '<h6 class="event-registered-family__title">' + escapeHtml(familyKey) + "</h6>" +
+                '<ul class="event-registered-teams">' + entriesMarkup + "</ul>" +
+                "</section>"
+              );
+            }
+
+            entriesMarkup = familyRegistrations
+              .map((registration) => {
+                const participantName = registration && typeof registration.name === "string" && registration.name.trim()
+                  ? registration.name.trim()
+                  : "Unnamed participant";
+                const cancelButtonMarkup = buildCancelButtonMarkup(registration, eventId);
+
+                return (
+                  '<li class="event-registered-person-row">' +
+                  '<span class="event-registered-person-name">' + escapeHtml(participantName) + "</span>" +
+                  (cancelButtonMarkup ? '<span class="event-registered-entry-actions">' + cancelButtonMarkup + "</span>" : "") +
+                  "</li>"
+                );
+              })
+              .join("");
 
             return (
-              '<li class="event-registered-item">' +
-              '<div class="event-registered-item__details">' +
-              detailMarkup +
-              "</div>" +
-              (cancelButtonMarkup ? '<div class="event-registered-item__actions">' + cancelButtonMarkup + "</div>" : "") +
-              "</li>"
+              '<section class="event-registered-family">' +
+              '<h6 class="event-registered-family__title">' + escapeHtml(familyKey) + "</h6>" +
+              '<ul class="event-registered-people">' + entriesMarkup + "</ul>" +
+              "</section>"
             );
           })
+          .filter((sectionMarkup) => Boolean(sectionMarkup))
           .join("");
 
         participantsPanel.innerHTML =
           '<h6 class="event-registered-title">Registered Participants</h6>' +
-          '<ul class="event-registered-list">' +
-          participantRows +
-          "</ul>";
+          (familySectionsMarkup || '<p class="event-registration-soon">No participants yet.</p>');
       }
 
       function applyFamilySlotAvailability(form, state) {
@@ -2496,16 +2602,29 @@
         refreshEventRegistrationFormState(form, eventId);
 
         try {
+          const ownerToken = getOrCreateRegistrationOwnerToken();
+          const ownerTokenHash = await getRegistrationOwnerTokenHash(ownerToken);
           const result = await cancelEventRegistration({
             eventId,
             registrationId,
-            ownerToken: getOrCreateRegistrationOwnerToken(),
+            ownerToken,
+            ownerTokenHash,
           });
 
           if (!result.ok) {
-            const message = result.payload && typeof result.payload.message === "string" && result.payload.message.trim()
-              ? result.payload.message.trim()
-              : "Unable to cancel registration right now.";
+            const isBackendFailure = result.status >= 500 || result.status <= 0;
+            if (isBackendFailure) {
+              console.error("[registration] Cancel registration failed.", {
+                status: result.status,
+                payload: result.payload,
+              });
+            }
+
+            const message = isBackendFailure
+              ? "Unable to cancel registration right now. Please try again."
+              : result.payload && typeof result.payload.message === "string" && result.payload.message.trim()
+                ? result.payload.message.trim()
+                : "Unable to cancel registration right now. Please try again.";
             setEventFormFeedback(form, message, true);
             showToast(message);
             return;
@@ -2522,7 +2641,7 @@
           showToast("Your registration has been canceled.");
         } catch (error) {
           console.error("[registration] Could not cancel registration.", error);
-          const message = "Unable to cancel registration right now.";
+          const message = "Unable to cancel registration right now. Please try again.";
           setEventFormFeedback(form, message, true);
           showToast(message);
         } finally {
@@ -2892,16 +3011,19 @@
               return;
             }
 
-            const payload = {
-              eventId: activeEventId,
-              family: trimmedFamily,
-              name: participantName,
-              ownerToken: getOrCreateRegistrationOwnerToken(),
-            };
-
             form.dataset.isSubmitting = "true";
 
             try {
+              const ownerToken = getOrCreateRegistrationOwnerToken();
+              const ownerTokenHash = await getRegistrationOwnerTokenHash(ownerToken);
+              const payload = {
+                eventId: activeEventId,
+                family: trimmedFamily,
+                name: participantName,
+                ownerToken,
+                ownerTokenHash,
+              };
+
               const result = await submitEventRegistration(payload);
               const nextState = getRegistrationStatePayload(result.payload);
 
@@ -2959,17 +3081,20 @@
               return;
             }
 
-            const payload = {
-              eventId: activeEventId,
-              family: trimmedFamily,
-              captain,
-              members: filledMembers,
-              ownerToken: getOrCreateRegistrationOwnerToken(),
-            };
-
             form.dataset.isSubmitting = "true";
 
             try {
+              const ownerToken = getOrCreateRegistrationOwnerToken();
+              const ownerTokenHash = await getRegistrationOwnerTokenHash(ownerToken);
+              const payload = {
+                eventId: activeEventId,
+                family: trimmedFamily,
+                captain,
+                members: filledMembers,
+                ownerToken,
+                ownerTokenHash,
+              };
+
               const result = await submitEventRegistration(payload);
               const nextState = getRegistrationStatePayload(result.payload);
 
