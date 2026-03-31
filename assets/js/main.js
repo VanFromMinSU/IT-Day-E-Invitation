@@ -63,7 +63,7 @@
           },
         })
         : null;
-      const registrationEventIds = new Set(["rubiks-cube-competition", "sudoku-game-easy-level", "codm-tournament", "mobile-legends-tournament", "fast-typing", "crimping-competition", "assembling-and-disassembling-competition"]);
+      const registrationEventIds = new Set(["rubiks-cube-competition", "sudoku-game-easy-level", "codm-tournament", "mobile-legends-tournament", "fast-typing", "crimping-competition", "assembling-and-disassembling-competition", "battle-of-the-bands"]);
       let isAdminAuthorized = false;
       let isAdminModeRequested = false;
       let isAdminTokenAuthorized = false;
@@ -424,6 +424,38 @@
             "<ul><li>Primary: Accuracy</li><li>Secondary: Submission time</li><li>Tie-breaker: Additional round if applicable.</li></ul>" +
             '<p><strong>Automatic Disqualification:</strong></p>' +
             "<ul><li>Incomplete participants</li><li>Cheating</li><li>No ballpen marks</li><li>Exceeding 1-hour time limit</li></ul>",
+        },
+        "battle-of-the-bands": {
+          eventId: "battle-of-the-bands",
+          title: "Battle of the Bands",
+          venue: "Main Stage",
+          registrationType: "team",
+          mechanicsHtml:
+            '<h5>LIVE BAND COMPETITION</h5>' +
+            '<h5>MECHANICS AND RULES</h5>' +
+            '<ol>' +
+            '<li>Each group must perform an unpublished arrangement of Original Pilipino Music (OPM) or English songs. Lyrics must not contain any obscene, lewd, or inappropriate language.</li>' +
+            '<li>Each group must have a minimum of five (5) and a maximum of seven (7) members.</li>' +
+            '<li>Each group is given a total of 12 minutes, which includes set-up time, a warm-up song, and the contest piece. Exceeding the time limit will result in a deduction of 5 points from each judge.</li>' +
+            '<li>Each group must bring their own instruments, except for the drum set, which will be provided by the host institution. Changing cymbals is allowed. A minimum of four (4) amplifiers will also be provided (for lead guitar, rhythm guitar, bass guitar, and keyboard).</li>' +
+            '<li>Band members may be all-male, all-female, or a mix of both.</li>' +
+            '<li>The use of pyrotechnics, smoke effects, or any combustible materials as props is strictly prohibited.</li>' +
+            '<li>Medley arrangements are not allowed. Only one song performance is permitted.</li>' +
+            '<li>Coaches/trainers may assist only during the warm-up song. No coaching or interference is allowed during the actual contest performance.</li>' +
+            '<li>The host institution must provide an official timekeeper. A visible timer should be displayed on or near the stage.</li>' +
+            '<li>The decision of the judges is final and cannot be appealed.</li>' +
+            '</ol>' +
+            '<h5>CRITERIA FOR JUDGING</h5>' +
+            '<table class="event-criteria-table">' +
+            '<thead><tr><th>Criteria</th><th>Percentage</th></tr></thead>' +
+            '<tbody>' +
+            '<tr><td>Musicality (harmony, rhythm, sound quality)</td><td>50%</td></tr>' +
+            '<tr><td>Performance (stage presence, style)</td><td>30%</td></tr>' +
+            '<tr><td>Technical Skills (instrument handling)</td><td>10%</td></tr>' +
+            '<tr><td>Overall Impact (including interpretation)</td><td>10%</td></tr>' +
+            '</tbody>' +
+            '<tfoot><tr><td><strong>Total</strong></td><td><strong>100%</strong></td></tr></tfoot>' +
+            '</table>',
         },
         "codm-tournament": {
           eventId: "codm-tournament",
@@ -2347,7 +2379,7 @@
       }
 
       function getRegistrationClosedValidationMessage(eventId) {
-        if (eventId === "codm-tournament" || eventId === "mobile-legends-tournament") {
+        if (eventId === "codm-tournament" || eventId === "mobile-legends-tournament" || eventId === "battle-of-the-bands") {
           return "Registration is now closed. Maximum teams reached.";
         }
 
@@ -2366,7 +2398,11 @@
         return "This family has reached the maximum number of participants.";
       }
 
-      function getTeamLimitValidationMessage() {
+      function getTeamLimitValidationMessage(eventId) {
+        if (eventId === "battle-of-the-bands") {
+          return "Only one (1) band registration is allowed per family.";
+        }
+
         return "This family has already registered the maximum number of teams.";
       }
 
@@ -2386,6 +2422,25 @@
             memberLabels: ["Member 1", "Member 2", "Member 3", "Member 4"],
             fixedMemberFields: true,
             allowMemberControls: false,
+          };
+        }
+
+        if (eventId === "battle-of-the-bands") {
+          return {
+            maxMembers: 6,
+            minMembers: 4,
+            defaultMemberRows: 4,
+            requireCompleteMemberFields: true,
+            requiresExactMembers: false,
+            minTotalParticipants: 5,
+            maxTotalParticipants: 7,
+            sizeMessage: "Each band must have 5 to 7 members, including the Band Leader.",
+            familyLabel: "Family",
+            captainLabel: "Band Leader",
+            membersHeading: "Band Members",
+            memberLabels: [],
+            fixedMemberFields: false,
+            allowMemberControls: true,
           };
         }
 
@@ -2814,6 +2869,11 @@
 
         if (teamRules.requiresExactMembers) {
           submitButton.disabled = !teamState.captain || teamState.filledMembers.length !== teamRules.exactMembers;
+          return;
+        }
+
+        if (typeof teamRules.minMembers === "number" && teamState.filledMembers.length < teamRules.minMembers) {
+          submitButton.disabled = true;
           return;
         }
 
@@ -3442,8 +3502,8 @@
               return;
             }
 
-            if (registrationType === "team" && familyEntry && familyEntry.count >= 2) {
-              setEventFormFeedback(form, getTeamLimitValidationMessage(), true);
+            if (registrationType === "team" && familyEntry && familyEntry.count >= (typeof familyEntry.limit === "number" ? familyEntry.limit : 2)) {
+              setEventFormFeedback(form, getTeamLimitValidationMessage(activeEventId), true);
               refreshEventRegistrationFormState(form, activeEventId);
               return;
             }
@@ -3530,6 +3590,11 @@
             }
 
             if (teamRules.requiresExactMembers && filledMembers.length !== teamRules.exactMembers) {
+              setEventFormFeedback(form, getTeamSizeValidationMessage(activeEventId), true);
+              return;
+            }
+
+            if (!teamRules.requiresExactMembers && typeof teamRules.minMembers === "number" && filledMembers.length < teamRules.minMembers) {
               setEventFormFeedback(form, getTeamSizeValidationMessage(activeEventId), true);
               return;
             }

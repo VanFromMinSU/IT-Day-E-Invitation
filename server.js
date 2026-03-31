@@ -22,6 +22,7 @@ const REGISTRATION_EVENT_IDS = new Set([
   "fast-typing",
   "crimping-competition",
   "assembling-and-disassembling-competition",
+  "battle-of-the-bands",
 ]);
 const INDIVIDUAL_EVENT_IDS = new Set([
   "rubiks-cube-competition",
@@ -30,7 +31,7 @@ const INDIVIDUAL_EVENT_IDS = new Set([
   "crimping-competition",
   "assembling-and-disassembling-competition",
 ]);
-const TEAM_EVENT_IDS = new Set(["codm-tournament", "mobile-legends-tournament"]);
+const TEAM_EVENT_IDS = new Set(["codm-tournament", "mobile-legends-tournament", "battle-of-the-bands"]);
 const FAMILY_OPTIONS = ["Family 1 - Claude", "Family 2 - Grok", "Family 3 - Gemini", "Family 4 - Dola"];
 const FAMILY_TEAM_PREFIX = {
   "Family 1 - Claude": "A",
@@ -50,6 +51,7 @@ const EVENT_TITLE_MAP = {
   "fast-typing": "Fast Typing Competition",
   "crimping-competition": "Crimping Competition",
   "assembling-and-disassembling-competition": "Assembling and Disassembling Competition",
+  "battle-of-the-bands": "Battle of the Bands",
 };
 
 function getIndividualRegistrationConfig(eventId) {
@@ -78,14 +80,34 @@ function getTeamRegistrationConfig(eventId) {
     return {
       requiresExactMembers: true,
       maxMembers: 4,
+      minMembers: 4,
       maxTotalParticipants: 5,
+      minTotalParticipants: 5,
+      familyLimit: 2,
+      maxTeams: FAMILY_OPTIONS.length * 2,
+    };
+  }
+
+  if (eventId === "battle-of-the-bands") {
+    return {
+      requiresExactMembers: false,
+      maxMembers: 6,
+      minMembers: 4,
+      maxTotalParticipants: 7,
+      minTotalParticipants: 5,
+      familyLimit: 1,
+      maxTeams: FAMILY_OPTIONS.length,
     };
   }
 
   return {
     requiresExactMembers: true,
     maxMembers: 3,
+    minMembers: 3,
     maxTotalParticipants: 4,
+    minTotalParticipants: 4,
+    familyLimit: 2,
+    maxTeams: FAMILY_OPTIONS.length * 2,
   };
 }
 
@@ -335,7 +357,11 @@ function getRegistrationFamilyLimitMessage(eventId) {
   return "This family has reached the maximum number of participants.";
 }
 
-function getTeamLimitMessage() {
+function getTeamLimitMessage(eventId) {
+  if (eventId === "battle-of-the-bands") {
+    return "Only one (1) band registration is allowed per family.";
+  }
+
   return "This family has already registered the maximum number of teams.";
 }
 
@@ -350,6 +376,10 @@ function getRegistrationClosedMessage(eventId) {
 function getTeamSizeMessage(eventId) {
   if (eventId === "mobile-legends-tournament") {
     return "Each team must have exactly 5 members including the Team Captain / Leader.";
+  }
+
+  if (eventId === "battle-of-the-bands") {
+    return "Each band must have 5 to 7 members, including the Band Leader.";
   }
 
   return "Each team must have exactly 4 members including the Team Captain/Leader.";
@@ -393,7 +423,8 @@ function buildIndividualStats(eventId, registrations) {
   };
 }
 
-function buildTeamStats(registrations) {
+function buildTeamStats(eventId, registrations) {
+  const teamConfig = getTeamRegistrationConfig(eventId);
   const familyCounter = buildEmptyFamilyCounter();
 
   for (let i = 0; i < registrations.length; i += 1) {
@@ -408,17 +439,17 @@ function buildTeamStats(registrations) {
   return {
     mode: "team",
     totalTeams,
-    maxTeams: MAX_TEAMS_PER_EVENT,
-    remainingTeams: Math.max(0, MAX_TEAMS_PER_EVENT - totalTeams),
-    isClosed: totalTeams >= MAX_TEAMS_PER_EVENT,
+    maxTeams: teamConfig.maxTeams,
+    remainingTeams: Math.max(0, teamConfig.maxTeams - totalTeams),
+    isClosed: totalTeams >= teamConfig.maxTeams,
     perFamily: FAMILY_OPTIONS.map((family) => {
       const count = familyCounter[family] || 0;
 
       return {
         family,
         count,
-        limit: MAX_TEAMS_PER_FAMILY,
-        remaining: Math.max(0, MAX_TEAMS_PER_FAMILY - count),
+        limit: teamConfig.familyLimit,
+        remaining: Math.max(0, teamConfig.familyLimit - count),
       };
     }),
     teams: registrations.map((registration) => ({
@@ -441,7 +472,7 @@ function buildRegistrationStats(eventId, registrations) {
   }
 
   if (TEAM_EVENT_IDS.has(eventId)) {
-    return buildTeamStats(registrations);
+    return buildTeamStats(eventId, registrations);
   }
 
   return null;
@@ -904,20 +935,21 @@ app.post("/api/event-registrations", async (req, res) => {
       }
 
       if (TEAM_EVENT_IDS.has(eventId)) {
-        if (familyEntry.count >= MAX_TEAMS_PER_FAMILY) {
+        const teamConfig = getTeamRegistrationConfig(eventId);
+
+        if (familyEntry.count >= teamConfig.familyLimit) {
           return {
             changed: false,
             data: {
               status: 409,
               error: "family_team_limit_reached",
-              message: getTeamLimitMessage(),
+              message: getTeamLimitMessage(eventId),
             },
           };
         }
 
         const captain = sanitizePersonName(req.body && req.body.captain);
         const members = sanitizeMembers(req.body && req.body.members);
-        const teamConfig = getTeamRegistrationConfig(eventId);
 
         if (!captain) {
           return {
@@ -941,7 +973,7 @@ app.post("/api/event-registrations", async (req, res) => {
           };
         }
 
-        if (!teamConfig.requiresExactMembers && members.length > teamConfig.maxMembers) {
+        if (!teamConfig.requiresExactMembers && (members.length < teamConfig.minMembers || members.length > teamConfig.maxMembers)) {
           return {
             changed: false,
             data: {

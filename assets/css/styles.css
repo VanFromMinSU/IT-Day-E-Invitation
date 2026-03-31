@@ -1115,6 +1115,30 @@
       margin-top: 0.35rem;
     }
 
+    .event-mechanics .event-criteria-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.55rem;
+      font-size: 0.86rem;
+    }
+
+    .event-mechanics .event-criteria-table th,
+    .event-mechanics .event-criteria-table td {
+      border: 1px solid rgba(133, 255, 159, 0.2);
+      padding: 0.45rem 0.5rem;
+      text-align: left;
+    }
+
+    .event-mechanics .event-criteria-table th {
+      color: var(--yellow-400);
+      background: rgba(14, 30, 26, 0.75);
+    }
+
+    .event-mechanics .event-criteria-table tfoot td {
+      color: var(--text-100);
+      background: rgba(14, 30, 26, 0.58);
+    }
+
     .event-registration-wrap {
       margin-top: 0.2rem;
       border: 1px solid rgba(133, 255, 159, 0.13);
