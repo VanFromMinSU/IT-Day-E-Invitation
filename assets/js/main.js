@@ -102,6 +102,14 @@
           label: "Grand Opening",
           eventIds: ["parade-brass-band", "opening-ceremony"],
         },
+        "parade-slot": {
+          label: "Parade",
+          eventIds: ["parade-brass-band"],
+        },
+        "opening-program-slot": {
+          label: "Opening Program",
+          eventIds: ["opening-ceremony", "flag-raising", "harmonics", "program-proper"],
+        },
         "academic-coding": {
           label: "Academic and Coding Arena",
           eventIds: [
@@ -138,6 +146,9 @@
       const eventTitleMap = {
         "parade-brass-band": "Parade (with Brass Band)",
         "opening-ceremony": "Opening Ceremony",
+        "flag-raising": "Flag Raising",
+        harmonics: "Harmonics",
+        "program-proper": "Program Proper",
         "it-quiz-bee": "IT Quiz Bee",
         "fast-typing": "Fast Typing Competition",
         "crimping-competition": "Crimping Competition",
@@ -161,6 +172,81 @@
       };
 
       const eventCatalog = {
+        "parade-brass-band": {
+          eventId: "parade-brass-band",
+          title: "Parade (with Brass Band)",
+          venue: "Main Campus Grounds",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Guidelines</h5>' +
+            '<ul>' +
+            '<li>All participants must assemble at least 15 minutes before call time.</li>' +
+            '<li>Follow the designated parade route and marshal instructions at all times.</li>' +
+            '<li>Maintain proper formation and avoid blocking emergency or access lanes.</li>' +
+            '<li>Use only approved props, uniforms, and instruments for the parade segment.</li>' +
+            '<li>Observe discipline, safety, and respectful behavior throughout the activity.</li>' +
+            '</ul>',
+        },
+        "opening-ceremony": {
+          eventId: "opening-ceremony",
+          title: "Opening Ceremony",
+          venue: "Auditorium",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Guidelines</h5>' +
+            '<ul>' +
+            '<li>Participants and guests must be seated before the ceremony starts.</li>' +
+            '<li>Observe proper decorum during messages, introductions, and acknowledgments.</li>' +
+            '<li>Keep aisles clear and avoid movement while the program is in progress.</li>' +
+            '<li>Mobile devices must be set to silent mode.</li>' +
+            '<li>Follow ushers and organizers for seating and flow control.</li>' +
+            '</ul>',
+        },
+        "flag-raising": {
+          eventId: "flag-raising",
+          title: "Flag Raising",
+          venue: "Auditorium",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Guidelines</h5>' +
+            '<ul>' +
+            '<li>Everyone is expected to stand and face the flag during the rite.</li>' +
+            '<li>Maintain silence and proper posture while the ceremony is ongoing.</li>' +
+            '<li>Headwear should be removed unless required by official uniform protocol.</li>' +
+            '<li>No unnecessary movement, conversation, or disruption is allowed.</li>' +
+            '<li>Follow facilitator instructions from start to completion.</li>' +
+            '</ul>',
+        },
+        harmonics: {
+          eventId: "harmonics",
+          title: "Harmonics",
+          venue: "Auditorium",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Guidelines</h5>' +
+            '<ul>' +
+            '<li>Performers must be ready backstage before their assigned cue.</li>' +
+            '<li>Audio checks and technical setup must be completed prior to the segment.</li>' +
+            '<li>Respect performance flow by minimizing noise and movement.</li>' +
+            '<li>Use only approved accompaniment and equipment provided or cleared by organizers.</li>' +
+            '<li>Observe stage safety and coordinator instructions at all times.</li>' +
+            '</ul>',
+        },
+        "program-proper": {
+          eventId: "program-proper",
+          title: "Program Proper",
+          venue: "Auditorium",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Guidelines</h5>' +
+            '<ul>' +
+            '<li>Proceed according to the official sequence released by the program committee.</li>' +
+            '<li>Speakers and participants must be present and prepared before their turn.</li>' +
+            '<li>Observe time allotments to keep the program on schedule.</li>' +
+            '<li>Maintain professional conduct and respect for all speakers and segments.</li>' +
+            '<li>All announcements and transitions are under organizer control.</li>' +
+            '</ul>',
+        },
         "assembling-and-disassembling-competition": {
           eventId: "assembling-and-disassembling-competition",
           title: "Assembling and Disassembling Competition",
@@ -2206,7 +2292,13 @@
 
         const groupLabel = context.groupKey && eventGroupCatalog[context.groupKey] ? eventGroupCatalog[context.groupKey].label : context.categoryTitle;
         const selectionEvents = getSelectionEvents(context);
-        teaserSelectionContext.textContent = "Category: " + groupLabel + ". Select one event to view details and registration.";
+        const includesRegistrableEvent = selectionEvents.some((eventId) => {
+          const details = getEventDetailsById(eventId);
+          return details.registrationType !== "none";
+        });
+        teaserSelectionContext.textContent = includesRegistrableEvent
+          ? "Category: " + groupLabel + ". Select one event to view details and registration."
+          : "Category: " + groupLabel + ". Select one event to view details and guidelines.";
 
         if (selectionEvents.length === 0) {
           teaserSelectionList.innerHTML = '<p class="event-registration-soon">No events available yet for this category.</p>';
@@ -3012,6 +3104,18 @@
 
       function renderEventRegistration(details) {
         if (!teaserRegistration) {
+          return;
+        }
+
+        const registrationBlock = teaserRegistration.closest(".event-detail-block");
+        const isGuidelinesOnlyEvent = details.registrationType === "none";
+
+        if (registrationBlock instanceof HTMLElement) {
+          registrationBlock.hidden = isGuidelinesOnlyEvent;
+        }
+
+        if (isGuidelinesOnlyEvent) {
+          teaserRegistration.innerHTML = "";
           return;
         }
 
