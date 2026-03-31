@@ -2919,6 +2919,25 @@
         refreshEventRegistrationFormState(form, activeEventId);
       }
 
+      function setRegistrationStatusFallbackMessage(eventId, message) {
+        const activeEventId = getActiveEventId();
+        if (!message || activeEventId !== eventId) {
+          return;
+        }
+
+        const form = getActiveEventRegistrationForm();
+        if (!(form instanceof HTMLFormElement)) {
+          return;
+        }
+
+        const statusPanel = form.querySelector("[data-registration-status='true']");
+        if (!statusPanel) {
+          return;
+        }
+
+        statusPanel.innerHTML = '<p class="event-registration-soon">' + escapeHtml(message) + "</p>";
+      }
+
       function stopRegistrationRealtimeSync() {
         if (registrationPollIntervalId) {
           clearInterval(registrationPollIntervalId);
@@ -2946,6 +2965,11 @@
         if (registrationPollIntervalId) {
           clearInterval(registrationPollIntervalId);
         }
+
+        // Run an immediate silent fetch so users do not wait for the first interval tick.
+        fetchEventRegistrationState(eventId).catch(() => {
+          // Keep background polling silent.
+        });
 
         registrationPollIntervalId = setInterval(() => {
           fetchEventRegistrationState(eventId).catch(() => {
@@ -2999,10 +3023,16 @@
           return;
         }
 
+        if (!getCachedEventRegistrationState(eventId)) {
+          setRegistrationStatusFallbackMessage(eventId, "Loading registration details...");
+        }
+
         try {
           await fetchEventRegistrationState(eventId);
         } catch (error) {
-          showToast("Live registration updates are unavailable. Retrying in background.");
+          if (!getCachedEventRegistrationState(eventId)) {
+            setRegistrationStatusFallbackMessage(eventId, "Registration details are loading. You can continue filling out the form.");
+          }
         }
 
         const isRealtimeActive = startRegistrationRealtimeSync(eventId);
