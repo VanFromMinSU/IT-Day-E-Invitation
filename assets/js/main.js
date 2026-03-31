@@ -1308,10 +1308,13 @@
       async function callBackendWithFallback(functionName, params, requestUrl, requestOptions, options) {
         const config = options && typeof options === "object" ? options : {};
         const allowForbiddenFallback = Boolean(config.allowForbiddenFallback);
+        const allowInvalidEventFallback = Boolean(config.allowInvalidEventFallback);
         const rpcResult = await callBackendRpc(functionName, params || {});
+        const rpcPayload = rpcResult && rpcResult.payload && typeof rpcResult.payload === "object" ? rpcResult.payload : {};
+        const isInvalidEventResponse = rpcResult.status === 400 && rpcPayload.error === "invalid_event";
         if (
           rpcResult.ok ||
-          rpcResult.status === 400 ||
+          (rpcResult.status === 400 && !(allowInvalidEventFallback && isInvalidEventResponse)) ||
           rpcResult.status === 409 ||
           (rpcResult.status === 403 && !allowForbiddenFallback)
         ) {
@@ -1438,7 +1441,9 @@
           return callBackendWithFallback("get_registration_state", {
             p_event_id: requestUrl.searchParams.get("eventId") || "",
             p_owner_token: requestOwnerTokenHash || requestOwnerToken,
-          }, requestUrl, requestOptions);
+          }, requestUrl, requestOptions, {
+            allowInvalidEventFallback: true,
+          });
         }
 
         if (requestUrl.pathname === eventRegistrationApiPathname && method === "POST") {
@@ -1451,7 +1456,9 @@
             p_captain: body && typeof body.captain === "string" ? body.captain : null,
             p_members: body && Array.isArray(body.members) ? body.members : null,
             p_owner_token: requestOwnerTokenHash || requestOwnerToken,
-          }, requestUrl, requestOptions);
+          }, requestUrl, requestOptions, {
+            allowInvalidEventFallback: true,
+          });
         }
 
         if (requestUrl.pathname === eventRegistrationApiPathname + "/cancel" && method === "POST") {
@@ -1461,7 +1468,9 @@
             p_registration_id: body && typeof body.registrationId === "string" ? body.registrationId : "",
             p_event_id: body && typeof body.eventId === "string" ? body.eventId : "",
             p_owner_token: requestOwnerTokenHash || requestOwnerToken,
-          }, requestUrl, requestOptions);
+          }, requestUrl, requestOptions, {
+            allowInvalidEventFallback: true,
+          });
         }
 
         return buildResult(404, {
@@ -2465,6 +2474,50 @@
         return getTeamRegistrationRules(eventId).sizeMessage;
       }
 
+      function getTeamMinimumMembersValidationMessage(eventId) {
+        if (eventId === "battle-of-the-bands") {
+          return "At least 5 members are required, including the Band Leader.";
+        }
+
+        return "Not enough team members were provided.";
+      }
+
+      function updateTeamMemberControls(form, eventId) {
+        if (!(form instanceof HTMLFormElement) || (form.dataset.registrationType || "") !== "team") {
+          return;
+        }
+
+        const teamRules = getTeamRegistrationRules(eventId);
+        if (!teamRules.allowMemberControls) {
+          return;
+        }
+
+        const membersList = form.querySelector(".event-members-list");
+        if (!(membersList instanceof HTMLElement)) {
+          return;
+        }
+
+        const rows = Array.from(membersList.querySelectorAll(".event-member-row"));
+        const rowCount = rows.length;
+        const minRows = eventId === "battle-of-the-bands" ? 4 : 1;
+        const canAdd = rowCount < teamRules.maxMembers;
+        const canRemove = rowCount > minRows;
+
+        const addMemberButton = form.querySelector("[data-add-member='true']");
+        if (addMemberButton instanceof HTMLButtonElement) {
+          addMemberButton.disabled = !canAdd;
+          addMemberButton.hidden = !canAdd;
+        }
+
+        const removeButtons = membersList.querySelectorAll("[data-remove-member='true']");
+        removeButtons.forEach((button) => {
+          if (button instanceof HTMLButtonElement) {
+            button.disabled = !canRemove;
+            button.hidden = !canRemove;
+          }
+        });
+      }
+
       async function fetchEventRegistrationState(eventId) {
         const ownerToken = getOrCreateRegistrationOwnerToken();
         const ownerTokenHash = await getRegistrationOwnerTokenHash(ownerToken);
@@ -2884,6 +2937,7 @@
         const state = getCachedEventRegistrationState(eventId);
         renderEventRegistrationStatus(form, eventId, state);
         renderRegisteredParticipants(form, eventId, state);
+        updateTeamMemberControls(form, eventId);
 
         if (!state || !state.stats) {
           updateIndividualSubmitAvailability(form, null);
@@ -3278,6 +3332,11 @@
           '<button type="submit" class="btn btn-primary">Submit Team Registration</button>' +
           "</div>" +
           "</form>";
+
+        const teamForm = teaserRegistration.querySelector(".event-registration-form");
+        if (teamForm instanceof HTMLFormElement) {
+          updateTeamMemberControls(teamForm, details.eventId);
+        }
       }
 
       function addTeamMemberRow(membersList, isRequired) {
@@ -3427,6 +3486,7 @@
               if (rows.length >= teamRules.maxMembers) {
                 if (form instanceof HTMLFormElement) {
                   setEventFormFeedback(form, getTeamSizeValidationMessage(activeEventId), true);
+                  updateTeamMemberControls(form, activeEventId);
                 }
                 return;
               }
@@ -3446,11 +3506,19 @@
               return;
             }
 
+            const form = membersList.closest(".event-registration-form");
+            const activeEventId = getActiveEventId();
+            const teamRules = getTeamRegistrationRules(activeEventId);
+            const minRows = activeEventId === "battle-of-the-bands" ? 4 : 1;
+
             const rows = membersList.querySelectorAll(".event-member-row");
-            if (rows.length <= 1) {
-              const onlyInput = rows[0] ? rows[0].querySelector("input") : null;
-              if (onlyInput) {
-                onlyInput.value = "";
+            if (rows.length <= minRows) {
+              if (form instanceof HTMLFormElement) {
+                const feedbackMessage = activeEventId === "battle-of-the-bands"
+                  ? getTeamMinimumMembersValidationMessage(activeEventId)
+                  : getTeamSizeValidationMessage(activeEventId);
+                setEventFormFeedback(form, feedbackMessage, true);
+                updateTeamMemberControls(form, activeEventId);
               }
               return;
             }
@@ -3458,10 +3526,11 @@
             const row = removeMemberButton.closest(".event-member-row");
             if (row) {
               row.remove();
-              const form = membersList.closest(".event-registration-form");
-              const activeEventId = getActiveEventId();
               if (form instanceof HTMLFormElement && activeEventId) {
                 refreshEventRegistrationFormState(form, activeEventId);
+                if (!teamRules.requiresExactMembers) {
+                  setEventFormFeedback(form, "", false);
+                }
               }
             }
           }
@@ -3625,7 +3694,7 @@
             }
 
             if (!teamRules.requiresExactMembers && typeof teamRules.minMembers === "number" && filledMembers.length < teamRules.minMembers) {
-              setEventFormFeedback(form, getTeamSizeValidationMessage(activeEventId), true);
+              setEventFormFeedback(form, getTeamMinimumMembersValidationMessage(activeEventId), true);
               return;
             }
 
