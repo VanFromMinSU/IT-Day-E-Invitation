@@ -24,6 +24,8 @@ No local Express server is required in production.
    - supabase/migrations/20260329_fix_registration_reset_delete_where_clause.sql
    - supabase/migrations/20260329_registration_owner_cancel_support.sql
    - supabase/migrations/20260329_owner_token_hash_no_digest_patch.sql
+   - supabase/migrations/20260401_basketball_registration_support.sql
+   - supabase/migrations/20260401_registration_function_alignment_patch.sql
 3. In Database -> Replication, ensure Realtime is enabled for:
    - public.event_votes
    - public.event_registrations
