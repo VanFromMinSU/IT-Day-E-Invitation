@@ -23,6 +23,7 @@ const REGISTRATION_EVENT_IDS = new Set([
   "crimping-competition",
   "assembling-and-disassembling-competition",
   "battle-of-the-bands",
+  "basketball-half-court",
 ]);
 const INDIVIDUAL_EVENT_IDS = new Set([
   "rubiks-cube-competition",
@@ -31,7 +32,7 @@ const INDIVIDUAL_EVENT_IDS = new Set([
   "crimping-competition",
   "assembling-and-disassembling-competition",
 ]);
-const TEAM_EVENT_IDS = new Set(["codm-tournament", "mobile-legends-tournament", "battle-of-the-bands"]);
+const TEAM_EVENT_IDS = new Set(["codm-tournament", "mobile-legends-tournament", "battle-of-the-bands", "basketball-half-court"]);
 const FAMILY_OPTIONS = ["Family 1 - Claude", "Family 2 - Grok", "Family 3 - Gemini", "Family 4 - Dola"];
 const FAMILY_TEAM_PREFIX = {
   "Family 1 - Claude": "A",
@@ -52,6 +53,7 @@ const EVENT_TITLE_MAP = {
   "crimping-competition": "Crimping Competition",
   "assembling-and-disassembling-competition": "Assembling and Disassembling Competition",
   "battle-of-the-bands": "Battle of the Bands",
+  "basketball-half-court": "Basketball (Men's Half Court)",
 };
 
 function getIndividualRegistrationConfig(eventId) {
@@ -97,6 +99,18 @@ function getTeamRegistrationConfig(eventId) {
       minTotalParticipants: 5,
       familyLimit: 1,
       maxTeams: FAMILY_OPTIONS.length,
+    };
+  }
+
+  if (eventId === "basketball-half-court") {
+    return {
+      requiresExactMembers: false,
+      maxMembers: 3,
+      minMembers: 2,
+      maxTotalParticipants: 4,
+      minTotalParticipants: 3,
+      familyLimit: 1,
+      maxTeams: FAMILY_OPTIONS.length * 2,
     };
   }
 
@@ -362,6 +376,10 @@ function getTeamLimitMessage(eventId) {
     return "Only one (1) band registration is allowed per family.";
   }
 
+  if (eventId === "basketball-half-court") {
+    return "Only one (1) team registration is allowed per family.";
+  }
+
   return "This family has already registered the maximum number of teams.";
 }
 
@@ -380,6 +398,10 @@ function getTeamSizeMessage(eventId) {
 
   if (eventId === "battle-of-the-bands") {
     return "Each band must have 5 to 7 members, including the Band Leader.";
+  }
+
+  if (eventId === "basketball-half-court") {
+    return "Each team must have 3 to 4 players, including the Captain/Leader.";
   }
 
   return "Each team must have exactly 4 members including the Team Captain/Leader.";
@@ -957,7 +979,7 @@ app.post("/api/event-registrations", async (req, res) => {
             data: {
               status: 400,
               error: "invalid_payload",
-              message: "Please enter the team captain.",
+              message: "Please enter the captain/leader name.",
             },
           };
         }

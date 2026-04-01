@@ -63,7 +63,7 @@
           },
         })
         : null;
-      const registrationEventIds = new Set(["rubiks-cube-competition", "sudoku-game-easy-level", "codm-tournament", "mobile-legends-tournament", "fast-typing", "crimping-competition", "assembling-and-disassembling-competition", "battle-of-the-bands"]);
+      const registrationEventIds = new Set(["rubiks-cube-competition", "sudoku-game-easy-level", "codm-tournament", "mobile-legends-tournament", "fast-typing", "crimping-competition", "assembling-and-disassembling-competition", "battle-of-the-bands", "basketball-half-court"]);
       let isAdminAuthorized = false;
       let isAdminModeRequested = false;
       let isAdminTokenAuthorized = false;
@@ -476,6 +476,104 @@
             "<li><strong>Sportsmanship</strong><ul><li>Respect players and organizers.</li><li>No toxic behavior, trash talk, or harassment.</li><li>Follow organizer instructions.</li></ul></li>" +
             "<li><strong>Final Authority</strong><ul><li>Organizer has final decision on all disputes.</li><li>Rules may be adjusted before tournament starts.</li></ul></li>" +
             "</ol>",
+        },
+        "basketball-half-court": {
+          eventId: "basketball-half-court",
+          title: "Basketball (Men's Half Court)",
+          venue: "Basketball Court",
+          registrationType: "team",
+          mechanicsHtml:
+            '<h5>IT DAY 3x3 BASKETBALL</h5>' +
+            '<h5>OFFICIAL RULEBOOK</h5>' +
+            '<h5>1. Court and Players</h5>' +
+            '<ul>' +
+            '<li>The game shall be played on a half-court (15m x 11m) with one (1) basket.</li>' +
+            '<li>Each team shall consist of three (3) players on the court and one (1) substitute.</li>' +
+            '</ul>' +
+            '<h5>2. Game Duration</h5>' +
+            '<ul>' +
+            '<li>The game shall be played in a single ten (10)-minute period (running time).</li>' +
+            '<li>The first team to reach twenty-one (21) points shall be declared the winner.</li>' +
+            '<li>If no team reaches 21 points, the team with the higher score at the end of regulation time wins.</li>' +
+            '</ul>' +
+            '<h5>3. Overtime</h5>' +
+            '<ul>' +
+            '<li>If the score is tied at the end of regulation, an overtime period shall be played.</li>' +
+            '<li>The first team to score two (2) points in overtime shall be declared the winner.</li>' +
+            '</ul>' +
+            '<h5>4. Scoring System</h5>' +
+            '<ul>' +
+            '<li>1 point – Field goal inside the arc</li>' +
+            '<li>2 points – Field goal outside the arc</li>' +
+            '<li>1 point – Free throw</li>' +
+            '</ul>' +
+            '<h5>5. Game Start and Possession</h5>' +
+            '<ul>' +
+            '<li>A coin toss shall be conducted before the game.</li>' +
+            '<li>The winning team may choose to take initial possession OR defer possession to overtime.</li>' +
+            '<li>The game shall begin with a check ball at the top of the arc.</li>' +
+            '</ul>' +
+            '<h5>6. Possession and Ball Movement</h5>' +
+            '<ul>' +
+            '<li>After a successful basket or free throw, play continues immediately.</li>' +
+            '<li>The non-scoring team must clear the ball beyond the arc before attempting to score.</li>' +
+            '</ul>' +
+            '<h5>7. Clearing the Ball</h5>' +
+            '<ul>' +
+            '<li>After gaining possession (rebound or steal), the team must clear the ball beyond the arc before attempting a shot.</li>' +
+            '</ul>' +
+            '<h5>8. Shot Clock</h5>' +
+            '<ul>' +
+            '<li>A twelve (12) second shot clock shall be implemented.</li>' +
+            '</ul>' +
+            '<h5>9. Fouls and Penalties</h5>' +
+            '<ul>' +
+            '<li>Team fouls shall be counted cumulatively:</li>' +
+            '<li>1–6 fouls: No free throws</li>' +
+            '<li>7–9 fouls: Two (2) free throws</li>' +
+            '<li>10th foul and above: Two (2) free throws plus ball possession</li>' +
+            '</ul>' +
+            '<h5>10. Substitutions</h5>' +
+            '<ul>' +
+            '<li>Substitutions shall only be allowed during dead-ball situations.</li>' +
+            '</ul>' +
+            '<h5>11. Time-outs</h5>' +
+            '<ul>' +
+            '<li>Each team is allowed one (1) time-out.</li>' +
+            '<li>Time-out duration shall be thirty (30) seconds.</li>' +
+            '</ul>' +
+            '<h5>12. Violations</h5>' +
+            '<ul>' +
+            '<li>The following violations shall result in loss of possession:</li>' +
+            '<li>Traveling</li>' +
+            '<li>Double dribble</li>' +
+            '<li>Shot clock violation</li>' +
+            '<li>Failure to clear the ball</li>' +
+            '<li>Out-of-bounds</li>' +
+            '</ul>' +
+            '<h5>13. No Jump Ball Rule</h5>' +
+            '<ul>' +
+            '<li>All jump ball situations shall result in possession being awarded to the defensive team.</li>' +
+            '</ul>' +
+            '<h5>14. No-Charge Semi-Circle</h5>' +
+            '<ul>' +
+            '<li>The no-charge semicircle shall be observed.</li>' +
+            '<li>Charging fouls shall not be called inside this area.</li>' +
+            '</ul>' +
+            '<h5>15. Coaching</h5>' +
+            '<ul>' +
+            '<li>On-court coaching is not allowed during the game.</li>' +
+            '</ul>' +
+            '<h5>16. Officials and Decisions</h5>' +
+            '<ul>' +
+            '<li>Games shall be officiated by assigned referees and event staff.</li>' +
+            '<li>All decisions made by officials and organizers are final and binding.</li>' +
+            '</ul>' +
+            '<h5>17. Player Conduct</h5>' +
+            '<ul>' +
+            '<li>Players must wear proper sports attire.</li>' +
+            '<li>Any unsportsmanlike behavior may result in penalties or disqualification.</li>' +
+            '</ul>',
         },
       };
 
@@ -920,7 +1018,7 @@
       }
 
       function buildEmptyRegistrationState(eventId, reason) {
-        const isTeamEvent = eventId === "codm-tournament";
+        const isTeamEvent = eventId === "codm-tournament" || eventId === "mobile-legends-tournament" || eventId === "battle-of-the-bands" || eventId === "basketball-half-court";
         const stats = isTeamEvent
           ? {
             mode: "team",
@@ -2388,7 +2486,7 @@
       }
 
       function getRegistrationClosedValidationMessage(eventId) {
-        if (eventId === "codm-tournament" || eventId === "mobile-legends-tournament" || eventId === "battle-of-the-bands") {
+        if (eventId === "codm-tournament" || eventId === "mobile-legends-tournament" || eventId === "battle-of-the-bands" || eventId === "basketball-half-court") {
           return "Registration is now closed. Maximum teams reached.";
         }
 
@@ -2412,10 +2510,32 @@
           return "Only one (1) band registration is allowed per family.";
         }
 
+        if (eventId === "basketball-half-court") {
+          return "Only one (1) team registration is allowed per family.";
+        }
+
         return "This family has already registered the maximum number of teams.";
       }
 
       function getTeamRegistrationRules(eventId) {
+        if (eventId === "codm-tournament") {
+          return {
+            maxMembers: 3,
+            defaultMemberRows: 3,
+            requireCompleteMemberFields: true,
+            requiresExactMembers: true,
+            exactMembers: 3,
+            maxTotalParticipants: 4,
+            sizeMessage: "Each team must have exactly 4 members including the Team Captain/Leader.",
+            familyLabel: "Family",
+            captainLabel: "Captain/Leader",
+            membersHeading: "Members",
+            memberLabels: ["Member 1", "Member 2", "Member 3"],
+            fixedMemberFields: true,
+            allowMemberControls: false,
+          };
+        }
+
         if (eventId === "mobile-legends-tournament") {
           return {
             maxMembers: 4,
@@ -2425,9 +2545,9 @@
             exactMembers: 4,
             maxTotalParticipants: 5,
             sizeMessage: "Each team must have exactly 5 members including the Team Captain / Leader.",
-            familyLabel: "Family Name",
-            captainLabel: "Team Captain / Leader",
-            membersHeading: "Team Members",
+            familyLabel: "Family",
+            captainLabel: "Captain/Leader",
+            membersHeading: "Members",
             memberLabels: ["Member 1", "Member 2", "Member 3", "Member 4"],
             fixedMemberFields: true,
             allowMemberControls: false,
@@ -2445,8 +2565,27 @@
             maxTotalParticipants: 7,
             sizeMessage: "Each band must have 5 to 7 members, including the Band Leader.",
             familyLabel: "Family",
-            captainLabel: "Band Leader",
-            membersHeading: "Band Members",
+            captainLabel: "Captain/Leader",
+            membersHeading: "Members",
+            memberLabels: [],
+            fixedMemberFields: false,
+            allowMemberControls: true,
+          };
+        }
+
+        if (eventId === "basketball-half-court") {
+          return {
+            maxMembers: 3,
+            minMembers: 2,
+            defaultMemberRows: 2,
+            requireCompleteMemberFields: false,
+            requiresExactMembers: false,
+            minTotalParticipants: 3,
+            maxTotalParticipants: 4,
+            sizeMessage: "Each team must have 3 to 4 players, including the Captain/Leader.",
+            familyLabel: "Family",
+            captainLabel: "Captain/Leader",
+            membersHeading: "Members",
             memberLabels: [],
             fixedMemberFields: false,
             allowMemberControls: true,
@@ -2462,7 +2601,7 @@
           maxTotalParticipants: 4,
           sizeMessage: "Each team must have exactly 4 members including the Team Captain/Leader.",
           familyLabel: "Family",
-          captainLabel: "Team Captain",
+          captainLabel: "Captain/Leader",
           membersHeading: "Members",
           memberLabels: [],
           fixedMemberFields: false,
@@ -2477,6 +2616,10 @@
       function getTeamMinimumMembersValidationMessage(eventId) {
         if (eventId === "battle-of-the-bands") {
           return "At least 5 members are required, including the Band Leader.";
+        }
+
+        if (eventId === "basketball-half-court") {
+          return "At least 3 players are required, including the Captain/Leader.";
         }
 
         return "Not enough team members were provided.";
@@ -2499,7 +2642,7 @@
 
         const rows = Array.from(membersList.querySelectorAll(".event-member-row"));
         const rowCount = rows.length;
-        const minRows = eventId === "battle-of-the-bands" ? 4 : 1;
+        const minRows = eventId === "battle-of-the-bands" ? 4 : eventId === "basketball-half-court" ? 2 : 1;
         const canAdd = rowCount < teamRules.maxMembers;
         const canRemove = rowCount > minRows;
 
@@ -3279,7 +3422,7 @@
             "</select>" +
             "</div>" +
             '<div class="event-form-field">' +
-            '<label for="event-name">Name</label>' +
+            '<label for="event-name">Participant Name</label>' +
             '<input id="event-name" name="name" type="text" autocomplete="name" placeholder="Enter participant name" required />' +
             "</div>" +
             "</div>" +
@@ -3315,7 +3458,7 @@
           "</div>" +
           '<div class="event-form-field">' +
           '<label for="event-captain">' + escapeHtml(captainLabel) + '</label>' +
-          '<input id="event-captain" name="captain" type="text" autocomplete="name" placeholder="Enter team captain" required />' +
+          '<input id="event-captain" name="captain" type="text" autocomplete="name" placeholder="Enter captain/leader name" required />' +
           "</div>" +
           "</div>" +
           '<div class="event-members-wrap">' +
@@ -3329,7 +3472,7 @@
           '<div class="event-registered-participants" data-registered-participants="true" aria-live="polite"></div>' +
           '<p class="event-form-feedback" aria-live="polite"></p>' +
           '<div class="registration-actions event-form-actions">' +
-          '<button type="submit" class="btn btn-primary">Submit Team Registration</button>' +
+          '<button type="submit" class="btn btn-primary">Submit Registration</button>' +
           "</div>" +
           "</form>";
 
@@ -3509,12 +3652,12 @@
             const form = membersList.closest(".event-registration-form");
             const activeEventId = getActiveEventId();
             const teamRules = getTeamRegistrationRules(activeEventId);
-            const minRows = activeEventId === "battle-of-the-bands" ? 4 : 1;
+            const minRows = activeEventId === "battle-of-the-bands" ? 4 : activeEventId === "basketball-half-court" ? 2 : 1;
 
             const rows = membersList.querySelectorAll(".event-member-row");
             if (rows.length <= minRows) {
               if (form instanceof HTMLFormElement) {
-                const feedbackMessage = activeEventId === "battle-of-the-bands"
+                const feedbackMessage = activeEventId === "battle-of-the-bands" || activeEventId === "basketball-half-court"
                   ? getTeamMinimumMembersValidationMessage(activeEventId)
                   : getTeamSizeValidationMessage(activeEventId);
                 setEventFormFeedback(form, feedbackMessage, true);
@@ -3679,7 +3822,7 @@
             const filledMembers = teamState.filledMembers;
 
             if (!captain) {
-              setEventFormFeedback(form, "Please enter the team captain.", true);
+              setEventFormFeedback(form, "Please enter the captain/leader name.", true);
               return;
             }
 
