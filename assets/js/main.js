@@ -63,7 +63,7 @@
           },
         })
         : null;
-      const registrationEventIds = new Set(["rubiks-cube-competition", "sudoku-game-easy-level", "codm-tournament", "mobile-legends-tournament", "fast-typing", "crimping-competition", "assembling-and-disassembling-competition", "battle-of-the-bands", "basketball-half-court"]);
+      const registrationEventIds = new Set(["rubiks-cube-competition", "sudoku-game-easy-level", "it-quiz-bee", "codm-tournament", "mobile-legends-tournament", "fast-typing", "crimping-competition", "assembling-and-disassembling-competition", "battle-of-the-bands", "basketball-half-court"]);
       let isAdminAuthorized = false;
       let isAdminModeRequested = false;
       let isAdminTokenAuthorized = false;
@@ -245,6 +245,93 @@
             '<li>Observe time allotments to keep the program on schedule.</li>' +
             '<li>Maintain professional conduct and respect for all speakers and segments.</li>' +
             '<li>All announcements and transitions are under organizer control.</li>' +
+            '</ul>',
+        },
+        "it-quiz-bee": {
+          eventId: "it-quiz-bee",
+          title: "IT Quiz Bee Competition",
+          venue: "BSIT 2-F2 ROOM",
+          registrationType: "team",
+          mechanicsHtml:
+            '<h5>IT QUIZ BEE COMPETITION</h5>' +
+            '<h5>Mechanics and Guidelines</h5>' +
+            '<h5>AWARDS</h5>' +
+            '<ul>' +
+            '<li>GOLD - Champion</li>' +
+            '<li>SILVER - 1st Runner-up</li>' +
+            '<li>BRONZE - 2nd Runner-up</li>' +
+            '</ul>' +
+            '<h5>SUBJECT COVERAGE</h5>' +
+            '<p>Questions will cover: CS/IT Concepts, Current Trends in CS/IT, Programming Languages, Web Design and Development, Mobile Application Development, Internet Applications, System Analysis and Design, Database Concepts and RDBMS, Logic Design and Switching, Computer Architecture and Organization, Software Engineering and Project Management, Operating System, Data Communication and Networks, IT Security, Data Structures and Algorithm, Automata, and Discrete Mathematics.</p>' +
+            '<h5>PARTICIPANTS / REGISTRATION and WATCHERS</h5>' +
+            '<ul>' +
+            '<li>Each team shall consist of four (4) participants.</li>' +
+            '<li>Participants must have exemplary knowledge in I.T. disciplines and applications.</li>' +
+            '<li>Each team/family must provide one (1) watcher.</li>' +
+            '<li>The assigned watcher will monitor an opposing team, not their own.</li>' +
+            '<li>All participants and watcher must be officially registered at least one (1) week before the competition. Late registrations will not be accepted.</li>' +
+            '<li>Changes to participants after registration are allowed only for serious reasons.</li>' +
+            '</ul>' +
+            '<h5>CHALLENGE FORMAT</h5>' +
+            '<ul>' +
+            '<li>The competition consists of three rounds: EASY, AVERAGE, and DIFFICULT.</li>' +
+            '<li>Each round varies in difficulty, question type, time limit, and corresponding points.</li>' +
+            '</ul>' +
+            '<h5>MODE OF ANSWERING</h5>' +
+            '<ul>' +
+            '<li>EASY and AVERAGE Rounds: Teams will use printed answer cards (A, B, C, D).</li>' +
+            '<li>Raise one card per question to indicate the final answer.</li>' +
+            '<li>DIFFICULT Round: Teams will use blank sheets to write answers.</li>' +
+            '<li>Answers must be clear; once the facilitator says "pens up," writing stops.</li>' +
+            '<li>No erasures are allowed in the DIFFICULT round.</li>' +
+            '</ul>' +
+            '<h5>ROUND MECHANICS</h5>' +
+            '<h6>EASY ROUND</h6>' +
+            '<ul>' +
+            '<li>Multiple-choice (A-D)</li>' +
+            '<li>10 questions</li>' +
+            '<li>10 seconds per question</li>' +
+            '<li>2 points per correct answer</li>' +
+            '</ul>' +
+            '<h6>AVERAGE ROUND</h6>' +
+            '<ul>' +
+            '<li>Multiple-choice (A-D)</li>' +
+            '<li>10 questions</li>' +
+            '<li>15 seconds per question</li>' +
+            '<li>3 points per correct answer</li>' +
+            '</ul>' +
+            '<h6>DIFFICULT ROUND</h6>' +
+            '<ul>' +
+            '<li>Identification-type questions</li>' +
+            '<li>10 questions</li>' +
+            '<li>Each team gets 10 blank sheets and pens</li>' +
+            '<li>20 seconds per question</li>' +
+            '<li>5 points per correct answer</li>' +
+            '<li>No erasures allowed</li>' +
+            '</ul>' +
+            '<h5>TIE-BREAKER (CLINCHER ROUND)</h5>' +
+            '<ul>' +
+            '<li>3 questions per team</li>' +
+            '<li>10 seconds per question</li>' +
+            '<li>6 points per correct answer</li>' +
+            '</ul>' +
+            '<h5>DISQUALIFICATION RULES</h5>' +
+            '<ul>' +
+            '<li>Teams arriving 10 minutes late will be disqualified.</li>' +
+            '<li>Switching answers after time is not allowed.</li>' +
+            '<li>Cheating or prompting leads to disqualification.</li>' +
+            '<li>Mobile phones, internet, or electronic devices are prohibited.</li>' +
+            '<li>Not following facilitator instructions may result in disqualification.</li>' +
+            '</ul>' +
+            '<h5>Registration Format</h5>' +
+            '<ul>' +
+            '<li>Family: [Family Name]</li>' +
+            '<li>Watcher: [Name of Watcher]</li>' +
+            '<li>Participants (maximum of 4 per family):</li>' +
+            '<li>1. [Participant 1]</li>' +
+            '<li>2. [Participant 2]</li>' +
+            '<li>3. [Participant 3]</li>' +
+            '<li>4. [Participant 4]</li>' +
             '</ul>',
         },
         "assembling-and-disassembling-competition": {
@@ -1018,7 +1105,7 @@
       }
 
       function buildEmptyRegistrationState(eventId, reason) {
-        const isTeamEvent = eventId === "codm-tournament" || eventId === "mobile-legends-tournament" || eventId === "battle-of-the-bands" || eventId === "basketball-half-court";
+        const isTeamEvent = eventId === "it-quiz-bee" || eventId === "codm-tournament" || eventId === "mobile-legends-tournament" || eventId === "battle-of-the-bands" || eventId === "basketball-half-court";
         const stats = isTeamEvent
           ? {
             mode: "team",
@@ -2486,7 +2573,7 @@
       }
 
       function getRegistrationClosedValidationMessage(eventId) {
-        if (eventId === "codm-tournament" || eventId === "mobile-legends-tournament" || eventId === "battle-of-the-bands" || eventId === "basketball-half-court") {
+        if (eventId === "codm-tournament" || eventId === "mobile-legends-tournament" || eventId === "battle-of-the-bands" || eventId === "basketball-half-court" || eventId === "it-quiz-bee") {
           return "Registration is now closed. Maximum teams reached.";
         }
 
@@ -2511,6 +2598,10 @@
         }
 
         if (eventId === "basketball-half-court") {
+          return "Only one (1) team registration is allowed per family.";
+        }
+
+        if (eventId === "it-quiz-bee") {
           return "Only one (1) team registration is allowed per family.";
         }
 
@@ -2589,6 +2680,24 @@
             memberLabels: [],
             fixedMemberFields: false,
             allowMemberControls: true,
+          };
+        }
+
+        if (eventId === "it-quiz-bee") {
+          return {
+            maxMembers: 4,
+            defaultMemberRows: 4,
+            requireCompleteMemberFields: true,
+            requiresExactMembers: true,
+            exactMembers: 4,
+            maxTotalParticipants: 5,
+            sizeMessage: "Each team must include one (1) watcher and four (4) participants.",
+            familyLabel: "Family",
+            captainLabel: "Watcher",
+            membersHeading: "Participants",
+            memberLabels: ["Participant 1", "Participant 2", "Participant 3", "Participant 4"],
+            fixedMemberFields: true,
+            allowMemberControls: false,
           };
         }
 
@@ -3822,7 +3931,10 @@
             const filledMembers = teamState.filledMembers;
 
             if (!captain) {
-              setEventFormFeedback(form, "Please enter the captain/leader name.", true);
+              const captainMessage = activeEventId === "it-quiz-bee"
+                ? "Please enter the watcher name."
+                : "Please enter the captain/leader name.";
+              setEventFormFeedback(form, captainMessage, true);
               return;
             }
 

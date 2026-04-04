@@ -17,6 +17,7 @@ const DATA_FILE = path.join(DATA_DIR, "reactions.json");
 const REGISTRATION_EVENT_IDS = new Set([
   "rubiks-cube-competition",
   "sudoku-game-easy-level",
+  "it-quiz-bee",
   "codm-tournament",
   "mobile-legends-tournament",
   "fast-typing",
@@ -32,7 +33,7 @@ const INDIVIDUAL_EVENT_IDS = new Set([
   "crimping-competition",
   "assembling-and-disassembling-competition",
 ]);
-const TEAM_EVENT_IDS = new Set(["codm-tournament", "mobile-legends-tournament", "battle-of-the-bands", "basketball-half-court"]);
+const TEAM_EVENT_IDS = new Set(["it-quiz-bee", "codm-tournament", "mobile-legends-tournament", "battle-of-the-bands", "basketball-half-court"]);
 const FAMILY_OPTIONS = ["Family 1 - Claude", "Family 2 - Grok", "Family 3 - Gemini", "Family 4 - Dola"];
 const FAMILY_TEAM_PREFIX = {
   "Family 1 - Claude": "A",
@@ -47,6 +48,7 @@ const MAX_TEAMS_PER_EVENT = FAMILY_OPTIONS.length * MAX_TEAMS_PER_FAMILY;
 const EVENT_TITLE_MAP = {
   "rubiks-cube-competition": "Rubik's Cube Competition",
   "sudoku-game-easy-level": "Sudoku Game (Easy Level)",
+  "it-quiz-bee": "IT Quiz Bee Competition",
   "codm-tournament": "Call of Duty: Mobile (CODM) Tournament",
   "mobile-legends-tournament": "Mobile Legends Tournament",
   "fast-typing": "Fast Typing Competition",
@@ -78,6 +80,18 @@ function getIndividualRegistrationConfig(eventId) {
 }
 
 function getTeamRegistrationConfig(eventId) {
+  if (eventId === "it-quiz-bee") {
+    return {
+      requiresExactMembers: true,
+      maxMembers: 4,
+      minMembers: 4,
+      maxTotalParticipants: 5,
+      minTotalParticipants: 5,
+      familyLimit: 1,
+      maxTeams: FAMILY_OPTIONS.length,
+    };
+  }
+
   if (eventId === "mobile-legends-tournament") {
     return {
       requiresExactMembers: true,
@@ -380,6 +394,10 @@ function getTeamLimitMessage(eventId) {
     return "Only one (1) team registration is allowed per family.";
   }
 
+  if (eventId === "it-quiz-bee") {
+    return "Only one (1) team registration is allowed per family.";
+  }
+
   return "This family has already registered the maximum number of teams.";
 }
 
@@ -402,6 +420,10 @@ function getTeamSizeMessage(eventId) {
 
   if (eventId === "basketball-half-court") {
     return "Each team must have 3 to 4 players, including the Captain/Leader.";
+  }
+
+  if (eventId === "it-quiz-bee") {
+    return "Each team must include one (1) watcher and four (4) participants.";
   }
 
   return "Each team must have exactly 4 members including the Team Captain/Leader.";
@@ -979,7 +1001,7 @@ app.post("/api/event-registrations", async (req, res) => {
             data: {
               status: 400,
               error: "invalid_payload",
-              message: "Please enter the captain/leader name.",
+              message: eventId === "it-quiz-bee" ? "Please enter the watcher name." : "Please enter the captain/leader name.",
             },
           };
         }
