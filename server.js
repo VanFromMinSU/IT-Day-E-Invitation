@@ -15,6 +15,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
 const DATA_DIR = path.join(__dirname, "data");
 const DATA_FILE = path.join(DATA_DIR, "reactions.json");
 const REGISTRATION_EVENT_IDS = new Set([
+  "chess-tournament",
   "rubiks-cube-competition",
   "sudoku-game-easy-level",
   "it-quiz-bee",
@@ -33,7 +34,7 @@ const INDIVIDUAL_EVENT_IDS = new Set([
   "crimping-competition",
   "assembling-and-disassembling-competition",
 ]);
-const TEAM_EVENT_IDS = new Set(["it-quiz-bee", "codm-tournament", "mobile-legends-tournament", "battle-of-the-bands", "basketball-half-court"]);
+const TEAM_EVENT_IDS = new Set(["chess-tournament", "it-quiz-bee", "codm-tournament", "mobile-legends-tournament", "battle-of-the-bands", "basketball-half-court"]);
 const FAMILY_OPTIONS = ["Family 1 - Claude", "Family 2 - Grok", "Family 3 - Gemini", "Family 4 - Dola"];
 const FAMILY_TEAM_PREFIX = {
   "Family 1 - Claude": "A",
@@ -46,6 +47,7 @@ const MAX_PARTICIPANTS_PER_EVENT = 8;
 const MAX_TEAMS_PER_FAMILY = 2;
 const MAX_TEAMS_PER_EVENT = FAMILY_OPTIONS.length * MAX_TEAMS_PER_FAMILY;
 const EVENT_TITLE_MAP = {
+  "chess-tournament": "Chess Competition",
   "rubiks-cube-competition": "Rubik's Cube Competition",
   "sudoku-game-easy-level": "Sudoku Game (Easy Level)",
   "it-quiz-bee": "IT Quiz Bee Competition",
@@ -80,6 +82,18 @@ function getIndividualRegistrationConfig(eventId) {
 }
 
 function getTeamRegistrationConfig(eventId) {
+  if (eventId === "chess-tournament") {
+    return {
+      requiresExactMembers: true,
+      maxMembers: 4,
+      minMembers: 4,
+      maxTotalParticipants: 4,
+      minTotalParticipants: 4,
+      familyLimit: 1,
+      maxTeams: FAMILY_OPTIONS.length,
+    };
+  }
+
   if (eventId === "it-quiz-bee") {
     return {
       requiresExactMembers: true,
@@ -390,6 +404,10 @@ function getTeamLimitMessage(eventId) {
     return "Only one (1) band registration is allowed per family.";
   }
 
+  if (eventId === "chess-tournament") {
+    return "Only one (1) team registration is allowed per family.";
+  }
+
   if (eventId === "basketball-half-court") {
     return "Only one (1) team registration is allowed per family.";
   }
@@ -410,6 +428,10 @@ function getRegistrationClosedMessage(eventId) {
 }
 
 function getTeamSizeMessage(eventId) {
+  if (eventId === "chess-tournament") {
+    return "Each team must include exactly two (2) male and two (2) female participants.";
+  }
+
   if (eventId === "mobile-legends-tournament") {
     return "Each team must have exactly 5 members including the Team Captain / Leader.";
   }
@@ -992,8 +1014,12 @@ app.post("/api/event-registrations", async (req, res) => {
           };
         }
 
-        const captain = sanitizePersonName(req.body && req.body.captain);
+        let captain = sanitizePersonName(req.body && req.body.captain);
         const members = sanitizeMembers(req.body && req.body.members);
+
+        if (!captain && eventId === "chess-tournament") {
+          captain = "Team Representative";
+        }
 
         if (!captain) {
           return {
@@ -1040,7 +1066,7 @@ app.post("/api/event-registrations", async (req, res) => {
           captain,
           members,
           teamLabel,
-          teamSize: 1 + members.length,
+          teamSize: eventId === "chess-tournament" ? members.length : 1 + members.length,
           ownerTokenHash,
           submittedAt: new Date().toISOString(),
         };

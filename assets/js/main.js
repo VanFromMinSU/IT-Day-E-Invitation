@@ -63,7 +63,7 @@
           },
         })
         : null;
-      const registrationEventIds = new Set(["rubiks-cube-competition", "sudoku-game-easy-level", "it-quiz-bee", "codm-tournament", "mobile-legends-tournament", "fast-typing", "crimping-competition", "assembling-and-disassembling-competition", "battle-of-the-bands", "basketball-half-court"]);
+      const registrationEventIds = new Set(["chess-tournament", "rubiks-cube-competition", "sudoku-game-easy-level", "it-quiz-bee", "codm-tournament", "mobile-legends-tournament", "fast-typing", "crimping-competition", "assembling-and-disassembling-competition", "battle-of-the-bands", "basketball-half-court"]);
       let isAdminAuthorized = false;
       let isAdminModeRequested = false;
       let isAdminTokenAuthorized = false;
@@ -466,6 +466,70 @@
             '<p>All players must use their pre-registered IGNs during gameplay.</p>' +
             '<h5>Technical Rules</h5>' +
             '<p>The tournament organizer holds no accountability for loss of power, internet connection issues, or personal technical problems experienced during the match. Players are strongly advised to ensure stable power and internet connections before the game.</p>',
+        },
+        "chess-tournament": {
+          eventId: "chess-tournament",
+          title: "Chess Competition",
+          venue: "Electronics Lab",
+          registrationType: "team",
+          mechanicsHtml:
+            '<h5>CHESS COMPETITION</h5>' +
+            '<h5>Mechanics and Guidelines</h5>' +
+            '<p><strong>FORMAT:</strong> Round Robin</p>' +
+            '<p><strong>TIME CONTROL:</strong> 10 minutes per player (no increment)</p>' +
+            '<p><strong>DIVISIONS:</strong> Male & Female (separate tournaments)</p>' +
+            '<p><strong>PARTICIPANTS:</strong> 8 players per division, 2 Male & 2 Female per team</p>' +
+            '<h5>Divisions</h5>' +
+            '<ul>' +
+            '<li>Male Division - 8 male participants</li>' +
+            '<li>Female Division - 8 female participants</li>' +
+            '<li>Each division has its own bracket, standings, and awards.</li>' +
+            '<li>Both divisions follow the same rules and format.</li>' +
+            '</ul>' +
+            '<h5>Tournament Format - Round Robin</h5>' +
+            '<ul>' +
+            '<li>Every player plays against every other player exactly once.</li>' +
+            '<li>Total rounds: 7 rounds per player.</li>' +
+            '<li>Games per round: 4 games played simultaneously.</li>' +
+            '<li>Estimated duration: 3 to 4 hours per division.</li>' +
+            '</ul>' +
+            '<h5>Scoring</h5>' +
+            '<ul>' +
+            '<li>Win = 1 point</li>' +
+            '<li>Draw = 0.5 point</li>' +
+            '<li>Loss = 0 point</li>' +
+            '</ul>' +
+            '<p>The player with the most points at the end of all 7 rounds is declared the Champion.</p>' +
+            '<h5>General Rules</h5>' +
+            '<ol>' +
+            '<li><strong>Time Control</strong><ul><li>Each player has 10 minutes on the clock. No increment.</li><li>If time runs out, the player loses unless the opponent does not have sufficient material to deliver checkmate.</li></ul></li>' +
+            '<li><strong>Touch-Move Rule</strong><ul><li>Touch your piece: you must move it.</li><li>Touch opponent\'s piece: you must capture it (if legal).</li><li>To adjust a piece, announce "adjust" before touching.</li></ul></li>' +
+            '<li><strong>Illegal Moves</strong><ul><li>First illegal move is corrected if caught before opponent\'s next move.</li><li>Second illegal move results in automatic loss.</li></ul></li>' +
+            '<li><strong>Phones and Electronic Devices</strong><ul><li>All devices must be silenced or off.</li><li>Using a phone/device during a game results in immediate loss.</li></ul></li>' +
+            '<li><strong>Late Arrival</strong><ul><li>Players must be at the board and ready at start time.</li><li>More than 10 minutes late results in game forfeiture.</li></ul></li>' +
+            '<li><strong>Conduct</strong><ul><li>Treat opponents and arbiter with respect.</li><li>No coaching or distracting opponents.</li></ul></li>' +
+            '<li><strong>Draw Claims</strong><ul><li>Draw by mutual agreement.</li><li>Draw by stalemate.</li><li>Draw by threefold repetition.</li><li>Draw by 50-move rule.</li><li>Draw by insufficient material.</li></ul></li>' +
+            '<li><strong>Arbiter\'s Decision</strong><ul><li>Tournament Arbiter oversees all games.</li><li>Arbiter ruling is final.</li><li>Concerns must be raised calmly and before the next move.</li></ul></li>' +
+            '</ol>' +
+            '<h5>Tie-Breaking Rules</h5>' +
+            '<p>If two or more players finish with the same score, tie-breakers are applied in this order:</p>' +
+            '<ol>' +
+            '<li>Direct Encounter</li>' +
+            '<li>Buchholz Score</li>' +
+            '<li>Sonneborn-Berger Score</li>' +
+            '<li>Number of Wins</li>' +
+            '<li>Armageddon Game (1st Place only): White 5 min, Black 4 min; draw means Black wins.</li>' +
+            '</ol>' +
+            '<h5>Registration Format</h5>' +
+            '<ul>' +
+            '<li>Family: [Family Name]</li>' +
+            '<li>Male Participants (max 2 per family):</li>' +
+            '<li>1. [Male Participant 1]</li>' +
+            '<li>2. [Male Participant 2]</li>' +
+            '<li>Female Participants (max 2 per family):</li>' +
+            '<li>1. [Female Participant 1]</li>' +
+            '<li>2. [Female Participant 2]</li>' +
+            '</ul>',
         },
         "rubiks-cube-competition": {
           eventId: "rubiks-cube-competition",
@@ -1105,7 +1169,7 @@
       }
 
       function buildEmptyRegistrationState(eventId, reason) {
-        const isTeamEvent = eventId === "it-quiz-bee" || eventId === "codm-tournament" || eventId === "mobile-legends-tournament" || eventId === "battle-of-the-bands" || eventId === "basketball-half-court";
+        const isTeamEvent = eventId === "chess-tournament" || eventId === "it-quiz-bee" || eventId === "codm-tournament" || eventId === "mobile-legends-tournament" || eventId === "battle-of-the-bands" || eventId === "basketball-half-court";
         const stats = isTeamEvent
           ? {
             mode: "team",
@@ -2573,7 +2637,7 @@
       }
 
       function getRegistrationClosedValidationMessage(eventId) {
-        if (eventId === "codm-tournament" || eventId === "mobile-legends-tournament" || eventId === "battle-of-the-bands" || eventId === "basketball-half-court" || eventId === "it-quiz-bee") {
+        if (eventId === "chess-tournament" || eventId === "codm-tournament" || eventId === "mobile-legends-tournament" || eventId === "battle-of-the-bands" || eventId === "basketball-half-court" || eventId === "it-quiz-bee") {
           return "Registration is now closed. Maximum teams reached.";
         }
 
@@ -2602,6 +2666,10 @@
         }
 
         if (eventId === "it-quiz-bee") {
+          return "Only one (1) team registration is allowed per family.";
+        }
+
+        if (eventId === "chess-tournament") {
           return "Only one (1) team registration is allowed per family.";
         }
 
@@ -2698,6 +2766,27 @@
             memberLabels: ["Participant 1", "Participant 2", "Participant 3", "Participant 4"],
             fixedMemberFields: true,
             allowMemberControls: false,
+          };
+        }
+
+        if (eventId === "chess-tournament") {
+          return {
+            maxMembers: 4,
+            defaultMemberRows: 4,
+            requireCompleteMemberFields: true,
+            requiresExactMembers: true,
+            exactMembers: 4,
+            maxTotalParticipants: 4,
+            sizeMessage: "Each team must include exactly two (2) male and two (2) female participants.",
+            familyLabel: "Family",
+            captainLabel: "Representative",
+            membersHeading: "Participants",
+            memberLabels: ["Male Participant 1", "Male Participant 2", "Female Participant 1", "Female Participant 2"],
+            fixedMemberFields: true,
+            allowMemberControls: false,
+            hideCaptainField: true,
+            captainDefaultValue: "Team Representative",
+            excludeCaptainFromSize: true,
           };
         }
 
@@ -2905,7 +2994,7 @@
           }
 
           const teamState = getCurrentTeamMemberState(form);
-          const currentTotal = (teamState.captain ? 1 : 0) + teamState.filledMembers.length;
+          const currentTotal = (teamRules.excludeCaptainFromSize ? 0 : (teamState.captain ? 1 : 0)) + teamState.filledMembers.length;
           lines.push("Current team size entered: " + currentTotal + "/" + teamRules.maxTotalParticipants + ".");
           lines.push(getTeamSizeValidationMessage(eventId));
 
@@ -3006,21 +3095,24 @@
                     ? registration.teamLabel.trim()
                     : "Team";
                   const cancelButtonMarkup = buildCancelButtonMarkup(registration, eventId);
-                  const teamRoster = [captain].concat(members).filter((member) => Boolean(member));
+                  const teamRoster = eventId === "chess-tournament"
+                    ? members.filter((member) => Boolean(member))
+                    : [captain].concat(members).filter((member) => Boolean(member));
                   const teamRosterMarkup = teamRoster.length > 0
                     ? teamRoster
                       .map((member) => '<li class="event-registered-team-member">' + escapeHtml(member) + "</li>")
                       .join("")
                     : '<li class="event-registered-team-member">No members listed.</li>';
+                  const teamTitle = eventId === "chess-tournament"
+                    ? escapeHtml(teamLabel)
+                    : escapeHtml(teamLabel) + " (Captain: " + escapeHtml(captain || "TBA") + ")";
 
                   return (
                     '<li class="event-registered-team">' +
                     '<div class="event-registered-team__header">' +
                     '<span class="event-registered-team__title">' +
-                    escapeHtml(teamLabel) +
-                    " (Captain: " +
-                    escapeHtml(captain || "TBA") +
-                    ")</span>" +
+                    teamTitle +
+                    "</span>" +
                     (cancelButtonMarkup ? '<span class="event-registered-entry-actions">' + cancelButtonMarkup + "</span>" : "") +
                     "</div>" +
                     '<ul class="event-registered-team__members">' +
@@ -3548,6 +3640,8 @@
         const teamRules = getTeamRegistrationRules(details.eventId);
         const familyLabel = teamRules.familyLabel || "Family";
         const captainLabel = teamRules.captainLabel || "Team Captain";
+        const hideCaptainField = Boolean(teamRules.hideCaptainField);
+        const defaultCaptainValue = teamRules.captainDefaultValue || "Team Representative";
         const membersHeading = teamRules.membersHeading || "Members";
         const membersListMarkup = teamRules.fixedMemberFields
           ? buildFixedTeamMemberRowsMarkup(teamRules.memberLabels, teamRules.requireCompleteMemberFields)
@@ -3555,6 +3649,12 @@
         const addMemberButtonMarkup = teamRules.allowMemberControls
           ? '<button type="button" class="btn btn-secondary event-inline-button" data-add-member="true">Add Member</button>'
           : "";
+        const captainFieldMarkup = hideCaptainField
+          ? '<input id="event-captain" name="captain" type="hidden" value="' + escapeHtml(defaultCaptainValue) + '" />'
+          : '<div class="event-form-field">' +
+            '<label for="event-captain">' + escapeHtml(captainLabel) + '</label>' +
+            '<input id="event-captain" name="captain" type="text" autocomplete="name" placeholder="Enter captain/leader name" required />' +
+            '</div>';
 
         teaserRegistration.innerHTML =
           '<form class="event-registration-form" data-registration-type="team" novalidate>' +
@@ -3565,10 +3665,7 @@
           buildFamilyOptionsMarkup() +
           "</select>" +
           "</div>" +
-          '<div class="event-form-field">' +
-          '<label for="event-captain">' + escapeHtml(captainLabel) + '</label>' +
-          '<input id="event-captain" name="captain" type="text" autocomplete="name" placeholder="Enter captain/leader name" required />' +
-          "</div>" +
+          captainFieldMarkup +
           "</div>" +
           '<div class="event-members-wrap">' +
           '<div class="event-members-header">' +
