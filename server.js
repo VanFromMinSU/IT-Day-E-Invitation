@@ -118,6 +118,18 @@ function getTeamRegistrationConfig(eventId) {
     };
   }
 
+  if (eventId === "codm-tournament") {
+    return {
+      requiresExactMembers: true,
+      maxMembers: 3,
+      minMembers: 3,
+      maxTotalParticipants: 4,
+      minTotalParticipants: 4,
+      familyLimit: 3,
+      maxTeams: FAMILY_OPTIONS.length * 3,
+    };
+  }
+
   if (eventId === "battle-of-the-bands") {
     return {
       requiresExactMembers: false,

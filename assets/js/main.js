@@ -615,11 +615,11 @@
           registrationType: "team",
           mechanicsHtml:
             '<ol>' +
-            "<li><strong>Tournament Overview</strong><ul><li>Format: Squad Battle Royale</li><li>Total Families: 4</li><li>Squads per Family: 2</li><li>Players per Squad: 4</li><li>Total Squads: 8</li><li>Total Players: 32</li><li>Platform: Mobile only</li></ul></li>" +
-            "<li><strong>Team Structure</strong><ul><li>Each family will field two squads.</li><li>Each squad must have exactly four players.</li><li>Players cannot switch squads once the tournament begins.</li></ul></li>" +
+            "<li><strong>Tournament Overview</strong><ul><li>Format: Squad Battle Royale</li><li>Total Families: 4</li><li>Squads per Family: up to 3</li><li>Players per Squad: 4</li><li>Total Squads: up to 12</li><li>Total Players: up to 48</li><li>Platform: Mobile only</li></ul></li>" +
+            "<li><strong>Team Structure</strong><ul><li>Each family can field 1 to 3 squads.</li><li>Each squad must have exactly four players.</li><li>Players cannot switch squads once the tournament begins.</li></ul></li>" +
             "<li><strong>Match Format</strong><ul><li>Total Matches: 3</li><li>All squads play in the same lobby per match.</li><li>Custom Room will be used (Room ID and Password from organizer).</li><li>Map Rotation: Game 1: Isolated, Game 2: Blackout, Game 3: Isolated.</li><li>Perspective: TPP (Third-Person Perspective).</li></ul></li>" +
             "<li><strong>Scoring System</strong><ul><li>Placement Points: 1st Place = 7 Points, 2nd Place = 5 Points, 3rd Place = 3 Points, 4th–8th Place = 1 Point.</li><li>Kill Points: 1 Kill = 2 Points.</li><li>Total score per match = Placement points + Kill points.</li></ul></li>" +
-            "<li><strong>Win Conditions</strong><ul><li>Squad Champion: highest total points after all matches.</li><li>Family Champion: combined points of both squads from the same family.</li></ul></li>" +
+            "<li><strong>Win Conditions</strong><ul><li>Squad Champion: highest total points after all matches.</li><li>Family Champion: combined points of all registered squads from the same family.</li></ul></li>" +
             "<li><strong>Tiebreakers</strong><ul><li>Higher total kills.</li><li>Most first-place finishes.</li><li>Better placement in the final match.</li></ul></li>" +
             "<li><strong>Game Rules</strong><ul><li>Play fairly, no external assistance.</li><li>Strictly prohibited: cheating, hacking, emulators, account sharing, intentional feeding, and leaving match.</li><li>No teaming between squads, even from the same family.</li><li>Restricted Items and Equipment: No Jackal, No Hoverbike, No Tank, No Ballistic Weapons, No Third-Party Tools, No Execute.</li></ul></li>" +
             "<li><strong>Match Procedure</strong><ul><li>Organizer provides Room ID and Password.</li><li>Players join on time.</li><li>After each match, screenshot results and submit to organizer.</li></ul></li>" +
