@@ -265,7 +265,7 @@ app.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
   }
 
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Admin-Token-Hash");
 
   if (req.method === "OPTIONS") {
@@ -289,6 +289,7 @@ app.use((req, res, next) => {
 let store = {
   votes: {},
   registrations: [],
+  mechanics: {},
   updatedAt: new Date().toISOString(),
 };
 
@@ -371,6 +372,81 @@ function sanitizeRegistrationId(value) {
 
   const normalized = value.trim();
   return /^[A-Za-z0-9-]{8,80}$/.test(normalized) ? normalized : "";
+}
+
+function sanitizeVenue(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.replace(/\s+/g, " ").trim().slice(0, 120);
+}
+
+function sanitizeMechanicsSection(section, index) {
+  if (!section || typeof section !== "object") {
+    return null;
+  }
+
+  const fallbackId = "section-" + String(index + 1);
+  const sectionIdValue = typeof section.id === "string" ? section.id.trim() : "";
+  const sectionId = /^[A-Za-z0-9_-]{1,60}$/.test(sectionIdValue) ? sectionIdValue : fallbackId;
+  const sectionTitle = typeof section.title === "string" ? section.title.trim().slice(0, 120) : "";
+
+  let contentHtml = "";
+  if (typeof section.contentHtml === "string") {
+    contentHtml = section.contentHtml.trim();
+  } else if (typeof section.content === "string") {
+    contentHtml = section.content.trim();
+  }
+
+  contentHtml = contentHtml.replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n");
+
+  if (!sectionTitle && !contentHtml) {
+    return null;
+  }
+
+  return {
+    id: sectionId,
+    title: sectionTitle,
+    contentHtml: contentHtml.slice(0, 50000),
+  };
+}
+
+function sanitizeMechanicsSections(sections) {
+  if (!Array.isArray(sections)) {
+    return [];
+  }
+
+  const sanitized = [];
+  for (let i = 0; i < sections.length; i += 1) {
+    const normalizedSection = sanitizeMechanicsSection(sections[i], i);
+    if (normalizedSection) {
+      sanitized.push(normalizedSection);
+    }
+  }
+
+  return sanitized;
+}
+
+function getMechanicsEntry(eventId) {
+  if (!eventId || !store.mechanics || typeof store.mechanics !== "object") {
+    return null;
+  }
+
+  const entry = store.mechanics[eventId];
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+
+  const sections = sanitizeMechanicsSections(entry.sections);
+  const updatedAt = typeof entry.updatedAt === "string" ? entry.updatedAt : store.updatedAt;
+
+  return {
+    eventId,
+    venue: sanitizeVenue(entry.venue || ""),
+    sections,
+    updatedAt,
+  };
 }
 
 function createRegistrationId() {
@@ -637,6 +713,7 @@ async function ensureDataFile() {
     const initial = {
       votes: {},
       registrations: [],
+      mechanics: {},
       updatedAt: new Date().toISOString(),
     };
 
@@ -655,11 +732,13 @@ async function loadStore() {
 
     const votes = parsed.votes && typeof parsed.votes === "object" ? parsed.votes : {};
     const registrations = Array.isArray(parsed.registrations) ? parsed.registrations : [];
+    const mechanics = parsed.mechanics && typeof parsed.mechanics === "object" ? parsed.mechanics : {};
     const updatedAt = typeof parsed.updatedAt === "string" ? parsed.updatedAt : new Date().toISOString();
 
     store = {
       votes,
       registrations,
+      mechanics,
       updatedAt,
     };
   } catch (error) {
@@ -896,6 +975,166 @@ app.post("/api/reset-registrations", async (req, res) => {
   } catch (error) {
     console.error("Unable to reset registrations:", error);
     res.status(500).json({ error: "internal_error", message: "Unable to reset registrations right now. Please try again." });
+  }
+});
+
+app.get("/api/event-mechanics", (req, res) => {
+  const eventId = sanitizeEventId(req.query.eventId);
+
+  if (!eventId) {
+    res.status(400).json({ error: "invalid_event", message: "Unsupported event." });
+    return;
+  }
+
+  const entry = getMechanicsEntry(eventId);
+  if (!entry) {
+    res.status(404).json({ error: "not_found", message: "No custom mechanics found for this event." });
+    return;
+  }
+
+  res.json({
+    eventId,
+    venue: entry.venue,
+    sections: entry.sections,
+    updatedAt: entry.updatedAt,
+  });
+});
+
+app.post("/api/event-mechanics", async (req, res) => {
+  const providedHash = getProvidedAdminTokenHash(req);
+  if (!hasValidAdminToken(req)) {
+    console.warn("[admin mechanics] Forbidden mechanics update attempt.", {
+      hasProvidedHash: Boolean(providedHash),
+    });
+    res.status(403).json({ error: "forbidden", message: "Admin access required." });
+    return;
+  }
+
+  const eventId = sanitizeEventId(req.body && req.body.eventId);
+  const venue = sanitizeVenue(req.body && req.body.venue);
+  const sections = sanitizeMechanicsSections(req.body && req.body.sections);
+
+  if (!eventId) {
+    res.status(400).json({ error: "invalid_event", message: "Unsupported event." });
+    return;
+  }
+
+  if (!sections.length && !venue) {
+    res.status(400).json({ error: "invalid_payload", message: "Please provide at least one section or a venue." });
+    return;
+  }
+
+  try {
+    const outcome = await queueMutation(() => {
+      if (!store.mechanics || typeof store.mechanics !== "object") {
+        store.mechanics = {};
+      }
+
+      const hasExistingRecord = Boolean(store.mechanics[eventId] && typeof store.mechanics[eventId] === "object");
+      const operation = hasExistingRecord ? "update" : "create";
+      console.info("[admin mechanics] Persisting mechanics", {
+        eventId,
+        operation,
+        venue,
+        sectionsCount: sections.length,
+      });
+
+      store.mechanics[eventId] = {
+        venue,
+        sections,
+        updatedAt: new Date().toISOString(),
+      };
+
+      return {
+        changed: true,
+        data: {
+          eventId,
+          operation,
+          created: operation === "create",
+          venue: store.mechanics[eventId].venue,
+          sections: store.mechanics[eventId].sections,
+          updatedAt: store.mechanics[eventId].updatedAt,
+        },
+      };
+    }, "mechanics:" + eventId);
+
+    res.json({
+      eventId: outcome && outcome.eventId ? outcome.eventId : eventId,
+      operation: outcome && typeof outcome.operation === "string" ? outcome.operation : "update",
+      created: Boolean(outcome && outcome.created),
+      venue: outcome && typeof outcome.venue === "string" ? outcome.venue : venue,
+      sections: outcome && Array.isArray(outcome.sections) ? outcome.sections : sections,
+      updatedAt: outcome && typeof outcome.updatedAt === "string" ? outcome.updatedAt : new Date().toISOString(),
+      message: outcome && outcome.created ? "Mechanics created successfully." : "Mechanics updated successfully.",
+    });
+  } catch (error) {
+    console.error("Unable to update event mechanics:", error);
+    res.status(500).json({ error: "internal_error", message: "Unable to update mechanics right now." });
+  }
+});
+
+app.delete("/api/event-mechanics", async (req, res) => {
+  const providedHash = getProvidedAdminTokenHash(req);
+  if (!hasValidAdminToken(req)) {
+    console.warn("[admin mechanics] Forbidden mechanics delete attempt.", {
+      hasProvidedHash: Boolean(providedHash),
+    });
+    res.status(403).json({ error: "forbidden", message: "Admin access required." });
+    return;
+  }
+
+  const eventId = sanitizeEventId(req.query.eventId);
+  if (!eventId) {
+    res.status(400).json({ error: "invalid_event", message: "Unsupported event." });
+    return;
+  }
+
+  try {
+    const outcome = await queueMutation(() => {
+      if (!store.mechanics || typeof store.mechanics !== "object") {
+        store.mechanics = {};
+      }
+
+      if (!store.mechanics[eventId]) {
+        return {
+          changed: false,
+          data: {
+            status: 404,
+            error: "not_found",
+            message: "No custom mechanics found for this event.",
+          },
+        };
+      }
+
+      delete store.mechanics[eventId];
+
+      return {
+        changed: true,
+        data: {
+          status: 200,
+          eventId,
+          message: "Mechanics deleted successfully.",
+        },
+      };
+    }, "mechanics-delete:" + eventId);
+
+    const status = outcome && Number.isInteger(outcome.status) ? outcome.status : 500;
+    if (status !== 200) {
+      res.status(status).json({
+        error: outcome && outcome.error ? outcome.error : "internal_error",
+        message: outcome && outcome.message ? outcome.message : "Unable to delete mechanics.",
+      });
+      return;
+    }
+
+    res.json({
+      eventId: outcome.eventId,
+      message: outcome.message,
+      updatedAt: store.updatedAt,
+    });
+  } catch (error) {
+    console.error("Unable to delete event mechanics:", error);
+    res.status(500).json({ error: "internal_error", message: "Unable to delete mechanics right now." });
   }
 });
 

@@ -36,6 +36,8 @@
       const responseAlreadySubmittedMessage = "You have already submitted your response. You can only respond once on this device.";
       const eventRegistrationApiBaseUrl = apiBaseUrl + "/api/event-registrations";
       const eventRegistrationApiPathname = getApiPathname(eventRegistrationApiBaseUrl);
+      const eventMechanicsApiBaseUrl = apiBaseUrl + "/api/event-mechanics";
+      const eventMechanicsApiPathname = getApiPathname(eventMechanicsApiBaseUrl);
       const resetRegistrationsApiBaseUrl = apiBaseUrl + "/api/reset-registrations";
       const resetRegistrationsApiPathname = getApiPathname(resetRegistrationsApiBaseUrl);
       const eventRegistrationPollingIntervalMs = 12000;
@@ -80,6 +82,8 @@
       let registrationRealtimeChannel = null;
       let responseCounts = { interested: 0, excited: 0 };
       const registrationStateByEventId = {};
+      const mechanicsOverridesByEventId = {};
+      const mechanicsEditStateByEventId = {};
       let ownedRegistrationLookup = loadOwnedRegistrationLookup();
       let registrationOwnerTokenHashCache = "";
       let registrationOwnerTokenHashCacheToken = "";
@@ -1722,6 +1726,38 @@
           });
         }
 
+        if (requestUrl.pathname === eventMechanicsApiPathname && method === "GET") {
+          return callBackendWithFallback("get_event_mechanics", {
+            p_event_id: requestUrl.searchParams.get("eventId") || "",
+          }, requestUrl, requestOptions, {
+            allowInvalidEventFallback: true,
+          });
+        }
+
+        if (requestUrl.pathname === eventMechanicsApiPathname && method === "POST") {
+          const requestAdminTokenHash = getRequestHeaderValue(requestOptions.headers, adminResetTokenHeader);
+
+          return callBackendWithFallback("upsert_event_mechanics_with_token", {
+            p_event_id: body && typeof body.eventId === "string" ? body.eventId : "",
+            p_venue: body && typeof body.venue === "string" ? body.venue : "",
+            p_sections: body && Array.isArray(body.sections) ? body.sections : [],
+            p_admin_token_hash: requestAdminTokenHash,
+          }, requestUrl, requestOptions, {
+            allowForbiddenFallback: true,
+          });
+        }
+
+        if (requestUrl.pathname === eventMechanicsApiPathname && method === "DELETE") {
+          const requestAdminTokenHash = getRequestHeaderValue(requestOptions.headers, adminResetTokenHeader);
+
+          return callBackendWithFallback("delete_event_mechanics_with_token", {
+            p_event_id: requestUrl.searchParams.get("eventId") || "",
+            p_admin_token_hash: requestAdminTokenHash,
+          }, requestUrl, requestOptions, {
+            allowForbiddenFallback: true,
+          });
+        }
+
         return buildResult(404, {
           error: "unsupported_route",
           message: "Unsupported backend route.",
@@ -2523,17 +2559,694 @@
       }
 
       function getEventDetailsById(eventId) {
-        if (eventCatalog[eventId]) {
-          return eventCatalog[eventId];
+        const baseDetails = eventCatalog[eventId]
+          ? eventCatalog[eventId]
+          : {
+            eventId,
+            title: eventTitleMap[eventId] || humanizeEventId(eventId),
+            venue: "To be updated",
+            registrationType: "coming-soon",
+            mechanicsHtml: "<p>To be updated.</p>",
+          };
+
+        const override = mechanicsOverridesByEventId[eventId];
+        if (!override || typeof override !== "object") {
+          return baseDetails;
+        }
+
+        const normalizedSections = normalizeMechanicsSections(override.sections);
+        const normalizedVenue = normalizeVenueText(override.venue || "");
+        if (!normalizedSections.length && !normalizedVenue) {
+          return baseDetails;
         }
 
         return {
-          eventId,
-          title: eventTitleMap[eventId] || humanizeEventId(eventId),
-          venue: "To be updated",
-          registrationType: "coming-soon",
-          mechanicsHtml: "<p>To be updated.</p>",
+          eventId: baseDetails.eventId,
+          title: baseDetails.title,
+          venue: normalizedVenue || normalizeVenueText(baseDetails.venue),
+          registrationType: baseDetails.registrationType,
+          mechanicsHtml: convertMechanicsSectionsToHtml(normalizedSections),
         };
+      }
+
+      function normalizeVenueText(value) {
+        if (typeof value !== "string") {
+          return "";
+        }
+
+        return value.replace(/\s+/g, " ").trim();
+      }
+
+      function normalizeSectionTitle(value, fallbackIndex) {
+        const title = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+        return title || "Section " + String(fallbackIndex + 1);
+      }
+
+      function normalizeSectionContentHtml(value) {
+        const rawValue = typeof value === "string" ? value.replace(/\r\n/g, "\n").trim() : "";
+        if (!rawValue) {
+          return "<p>To be updated.</p>";
+        }
+
+        if (/<\/?[a-z][\s\S]*>/i.test(rawValue)) {
+          return rawValue;
+        }
+
+        const lines = rawValue.split("\n").map((line) => line.trim());
+        const htmlParts = [];
+        let listBuffer = [];
+
+        function flushListBuffer() {
+          if (!listBuffer.length) {
+            return;
+          }
+
+          htmlParts.push("<ul>" + listBuffer.map((item) => "<li>" + escapeHtml(item) + "</li>").join("") + "</ul>");
+          listBuffer = [];
+        }
+
+        for (let i = 0; i < lines.length; i += 1) {
+          const line = lines[i];
+          if (!line) {
+            flushListBuffer();
+            continue;
+          }
+
+          if (/^(-|\*|•)\s+/.test(line)) {
+            listBuffer.push(line.replace(/^(-|\*|•)\s+/, "").trim());
+            continue;
+          }
+
+          flushListBuffer();
+          htmlParts.push("<p>" + escapeHtml(line) + "</p>");
+        }
+
+        flushListBuffer();
+        return htmlParts.join("");
+      }
+
+      function normalizeMechanicsSection(section, index) {
+        if (!section || typeof section !== "object") {
+          return null;
+        }
+
+        const sectionIdValue = typeof section.id === "string" ? section.id.trim() : "";
+        const sectionId = /^[A-Za-z0-9_-]{1,60}$/.test(sectionIdValue) ? sectionIdValue : "section-" + String(index + 1);
+        const sectionTitle = normalizeSectionTitle(section.title, index);
+        const contentHtml = typeof section.contentHtml === "string"
+          ? normalizeSectionContentHtml(section.contentHtml)
+          : normalizeSectionContentHtml(typeof section.content === "string" ? section.content : "");
+
+        if (!contentHtml) {
+          return null;
+        }
+
+        return {
+          id: sectionId,
+          title: sectionTitle,
+          contentHtml,
+        };
+      }
+
+      function normalizeMechanicsSections(sections) {
+        if (!Array.isArray(sections)) {
+          return [];
+        }
+
+        const normalizedSections = [];
+
+        for (let i = 0; i < sections.length; i += 1) {
+          const normalized = normalizeMechanicsSection(sections[i], i);
+          if (normalized) {
+            normalizedSections.push(normalized);
+          }
+        }
+
+        return normalizedSections;
+      }
+
+      function parseMechanicsSectionsFromHtml(mechanicsHtml) {
+        const html = typeof mechanicsHtml === "string" ? mechanicsHtml.trim() : "";
+        if (!html) {
+          return [];
+        }
+
+        const headingRegex = /<h5>([\s\S]*?)<\/h5>/gi;
+        const matches = [];
+        let match;
+
+        while ((match = headingRegex.exec(html)) !== null) {
+          matches.push({
+            index: match.index,
+            length: match[0].length,
+            titleRaw: match[1],
+          });
+        }
+
+        if (!matches.length) {
+          return [
+            {
+              id: "section-1",
+              title: "Section 1",
+              contentHtml: html,
+            },
+          ];
+        }
+
+        const sections = [];
+        for (let i = 0; i < matches.length; i += 1) {
+          const currentMatch = matches[i];
+          const nextMatch = matches[i + 1];
+          const contentStart = currentMatch.index + currentMatch.length;
+          const contentEnd = nextMatch ? nextMatch.index : html.length;
+          const rawTitle = String(currentMatch.titleRaw || "").replace(/<[^>]+>/g, "").trim();
+          const contentHtml = html.slice(contentStart, contentEnd).trim();
+
+          sections.push({
+            id: "section-" + String(i + 1),
+            title: rawTitle || "Section " + String(i + 1),
+            contentHtml,
+          });
+        }
+
+        return normalizeMechanicsSections(sections);
+      }
+
+      function convertMechanicsSectionsToHtml(sections) {
+        const normalizedSections = normalizeMechanicsSections(sections);
+        if (!normalizedSections.length) {
+          return "<p>To be updated.</p>";
+        }
+
+        return normalizedSections
+          .map((section) => {
+            const titleMarkup = section.title ? "<h5>" + escapeHtml(section.title) + "</h5>" : "";
+            return titleMarkup + section.contentHtml;
+          })
+          .join("");
+      }
+
+      function getMechanicsSectionsForEvent(eventId) {
+        const override = mechanicsOverridesByEventId[eventId];
+        if (override && typeof override === "object") {
+          return normalizeMechanicsSections(override.sections);
+        }
+
+        const details = eventCatalog[eventId];
+        if (!details) {
+          return [];
+        }
+
+        return parseMechanicsSectionsFromHtml(details.mechanicsHtml);
+      }
+
+      function getMechanicsVenueForEvent(eventId) {
+        const override = mechanicsOverridesByEventId[eventId];
+        if (override && typeof override.venue === "string") {
+          return normalizeVenueText(override.venue);
+        }
+
+        const details = eventCatalog[eventId];
+        if (!details) {
+          return "";
+        }
+
+        return normalizeVenueText(details.venue || "");
+      }
+
+      function hasExistingMechanicsRecord(eventId) {
+        const override = mechanicsOverridesByEventId[eventId];
+        if (!override || typeof override !== "object") {
+          return false;
+        }
+
+        const hasVenue = typeof override.venue === "string" && normalizeVenueText(override.venue).length > 0;
+        const hasSections = Array.isArray(override.sections) && normalizeMechanicsSections(override.sections).length > 0;
+        return hasVenue || hasSections;
+      }
+
+      function getMechanicsEditState(eventId) {
+        return eventId ? mechanicsEditStateByEventId[eventId] || null : null;
+      }
+
+      function isMechanicsEditMode(eventId) {
+        const editState = getMechanicsEditState(eventId);
+        return Boolean(editState && editState.isEditing);
+      }
+
+      function setMechanicsEditState(eventId, nextState) {
+        if (!eventId) {
+          return;
+        }
+
+        if (!nextState) {
+          delete mechanicsEditStateByEventId[eventId];
+          return;
+        }
+
+        mechanicsEditStateByEventId[eventId] = nextState;
+      }
+
+      function beginMechanicsEdit(eventId) {
+        if (!eventId) {
+          return;
+        }
+
+        setMechanicsEditState(eventId, {
+          isEditing: true,
+          originalVenue: getMechanicsVenueForEvent(eventId),
+          originalSections: normalizeMechanicsSections(getMechanicsSectionsForEvent(eventId)),
+        });
+      }
+
+      function endMechanicsEdit(eventId) {
+        setMechanicsEditState(eventId, null);
+      }
+
+      function buildMechanicsEditSectionsMarkup(eventId) {
+        const editState = getMechanicsEditState(eventId);
+        const sections = editState && Array.isArray(editState.originalSections)
+          ? editState.originalSections
+          : getMechanicsSectionsForEvent(eventId);
+
+        return normalizeMechanicsSections(sections)
+          .map((section) => {
+            return (
+              '<section data-mechanics-edit-section="true" data-section-id="' + escapeHtml(section.id) + '">' +
+              '<h5 contenteditable="true" data-mechanics-edit-title="true">' + escapeHtml(section.title || "") + "</h5>" +
+              '<div contenteditable="true" data-mechanics-edit-content="true">' + section.contentHtml + "</div>" +
+              "</section>"
+            );
+          })
+          .join("");
+      }
+
+      function renderMechanicsEditMode(eventId) {
+        if (!teaserMechanics || !teaserVenue) {
+          return;
+        }
+
+        teaserMechanics.innerHTML = buildMechanicsEditSectionsMarkup(eventId);
+        teaserVenue.textContent = getMechanicsVenueForEvent(eventId);
+        teaserVenue.setAttribute("contenteditable", "true");
+        teaserVenue.setAttribute("data-mechanics-edit-venue", "true");
+      }
+
+      function renderMechanicsReadOnly(details) {
+        if (!teaserMechanics || !teaserVenue) {
+          return;
+        }
+
+        teaserMechanics.innerHTML = details.mechanicsHtml;
+        teaserVenue.textContent = normalizeVenueText(details.venue || "");
+        teaserVenue.removeAttribute("contenteditable");
+        teaserVenue.removeAttribute("data-mechanics-edit-venue");
+      }
+
+      function collectMechanicsEditorState(eventId) {
+        if (!teaserMechanics || !teaserVenue) {
+          return {
+            venue: getMechanicsVenueForEvent(eventId),
+            sections: getMechanicsSectionsForEvent(eventId),
+          };
+        }
+
+        const editableSections = Array.from(teaserMechanics.querySelectorAll("[data-mechanics-edit-section='true']"));
+        const sections = editableSections
+          .map((section, index) => {
+            const titleNode = section.querySelector("[data-mechanics-edit-title='true']");
+            const contentNode = section.querySelector("[data-mechanics-edit-content='true']");
+            return {
+              id: section.getAttribute("data-section-id") || "section-" + String(index + 1),
+              title: titleNode ? titleNode.textContent || "" : "",
+              contentHtml: contentNode ? contentNode.innerHTML || "" : "",
+            };
+          });
+
+        return {
+          venue: normalizeVenueText(teaserVenue.textContent || ""),
+          sections: normalizeMechanicsSections(sections),
+        };
+      }
+
+      function normalizeMechanicsPayload(payload) {
+        const source = payload && typeof payload === "object" ? payload : {};
+        const venue = normalizeVenueText(source.venue || "");
+        let rawSections = source.sections;
+
+        if (!Array.isArray(rawSections)) {
+          rawSections = source.mechanicsAndGuidelines;
+        }
+
+        if (!Array.isArray(rawSections)) {
+          rawSections = source.mechanics;
+        }
+
+        if (typeof rawSections === "string") {
+          try {
+            const parsedSections = JSON.parse(rawSections);
+            rawSections = Array.isArray(parsedSections) ? parsedSections : [];
+          } catch (error) {
+            rawSections = [];
+          }
+        }
+
+        return {
+          venue,
+          sections: normalizeMechanicsSections(Array.isArray(rawSections) ? rawSections : []),
+          updatedAt: typeof source.updatedAt === "string" ? source.updatedAt : "",
+        };
+      }
+
+      async function fetchEventMechanics(eventId) {
+        if (!eventId) {
+          return null;
+        }
+
+        const requestUrl = eventMechanicsApiBaseUrl + "?eventId=" + encodeURIComponent(eventId);
+        const result = await fetchJson(requestUrl, { cache: "no-store" });
+
+        if (!result.ok) {
+          if (result.status === 404) {
+            delete mechanicsOverridesByEventId[eventId];
+            return null;
+          }
+
+          throw new Error("Could not fetch event mechanics.");
+        }
+
+        const normalizedPayload = normalizeMechanicsPayload(result.payload);
+        const sections = normalizedPayload.sections;
+        const venue = normalizedPayload.venue;
+
+        console.debug("[mechanics] fetched payload", {
+          eventId,
+          venue,
+          sectionsCount: sections.length,
+          updatedAt: normalizedPayload.updatedAt,
+        });
+
+        if (!sections.length && !venue) {
+          delete mechanicsOverridesByEventId[eventId];
+          return null;
+        }
+
+        const entry = {
+          venue,
+          sections,
+          updatedAt: normalizedPayload.updatedAt,
+        };
+
+        mechanicsOverridesByEventId[eventId] = entry;
+        return entry;
+      }
+
+      async function saveEventMechanics(eventId, sections, venue) {
+        const activeAdminTokenHash = getActiveAdminTokenHash();
+        if (!activeAdminTokenHash) {
+          return buildResult(403, {
+            error: "forbidden",
+            message: "Admin token required.",
+          });
+        }
+
+        const operation = hasExistingMechanicsRecord(eventId) ? "update" : "create";
+        console.debug("[mechanics] save request", {
+          eventId,
+          operation,
+          venue: normalizeVenueText(venue || ""),
+          sectionsCount: normalizeMechanicsSections(sections).length,
+        });
+
+        return fetchJson(eventMechanicsApiBaseUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            [adminResetTokenHeader]: activeAdminTokenHash,
+          },
+          body: JSON.stringify({
+            eventId,
+            venue: normalizeVenueText(venue || ""),
+            sections: normalizeMechanicsSections(sections),
+          }),
+        });
+      }
+
+      async function deleteEventMechanics(eventId) {
+        const activeAdminTokenHash = getActiveAdminTokenHash();
+        if (!activeAdminTokenHash) {
+          return buildResult(403, {
+            error: "forbidden",
+            message: "Admin token required.",
+          });
+        }
+
+        return fetchJson(eventMechanicsApiBaseUrl + "?eventId=" + encodeURIComponent(eventId), {
+          method: "DELETE",
+          headers: {
+            [adminResetTokenHeader]: activeAdminTokenHash,
+          },
+        });
+      }
+
+      function canManageMechanics() {
+        return Boolean(getActiveAdminTokenHash());
+      }
+
+      function buildMechanicsAdminControlsMarkup(eventId) {
+        if (!canManageMechanics()) {
+          return "";
+        }
+
+        if (!isMechanicsEditMode(eventId)) {
+          return (
+            '<div class="registration-actions event-form-actions" data-mechanics-admin-controls="true">' +
+            '<button type="button" class="btn btn-secondary event-inline-button" data-mechanics-action="start-edit">Edit Mechanics</button>' +
+            '<button type="button" class="btn btn-secondary event-inline-button" data-mechanics-action="delete-event">Delete Event Mechanics</button>' +
+            "</div>"
+          );
+        }
+
+        return (
+          '<div class="registration-actions event-form-actions" data-mechanics-admin-controls="true">' +
+          '<button type="button" class="btn btn-secondary event-inline-button" data-mechanics-action="add">Add Section</button>' +
+          '<button type="button" class="btn btn-secondary event-inline-button" data-mechanics-action="move">Reorder Sections</button>' +
+          '<button type="button" class="btn btn-secondary event-inline-button" data-mechanics-action="delete">Delete Section</button>' +
+          '<button type="button" class="btn btn-secondary event-inline-button" data-mechanics-action="save">Save Changes</button>' +
+          '<button type="button" class="btn btn-secondary event-inline-button" data-mechanics-action="cancel">Cancel</button>' +
+          "</div>"
+        );
+      }
+
+      function renderMechanicsAdminControls(eventId) {
+        if (!teaserMechanics) {
+          return;
+        }
+
+        const existingControls = teaserMechanics.querySelector("[data-mechanics-admin-controls='true']");
+        if (existingControls) {
+          existingControls.remove();
+        }
+
+        const controlsMarkup = buildMechanicsAdminControlsMarkup(eventId);
+        if (!controlsMarkup) {
+          return;
+        }
+
+        teaserMechanics.insertAdjacentHTML("beforeend", controlsMarkup);
+      }
+
+      function promptSectionIndex(sections, actionLabel) {
+        if (!sections.length) {
+          return -1;
+        }
+
+        const listText = sections
+          .map((section, index) => String(index + 1) + ". " + (section.title || "Untitled Section"))
+          .join("\n");
+        const response = window.prompt(actionLabel + "\n\n" + listText + "\n\nEnter section number:");
+
+        if (!response) {
+          return -1;
+        }
+
+        const parsedValue = Number.parseInt(response, 10);
+        if (!Number.isInteger(parsedValue) || parsedValue < 1 || parsedValue > sections.length) {
+          return -1;
+        }
+
+        return parsedValue - 1;
+      }
+
+      async function handleMechanicsAction(action, eventId) {
+        if (!canManageMechanics()) {
+          showToast("Admin token required.");
+          return;
+        }
+
+        if (action === "start-edit") {
+          beginMechanicsEdit(eventId);
+          renderMechanicsEditMode(eventId);
+          renderMechanicsAdminControls(eventId);
+          showToast("Edit mode enabled.");
+          return;
+        }
+
+        if (action === "cancel") {
+          endMechanicsEdit(eventId);
+          await showSelectedEventDetails(eventId);
+          showToast("Changes discarded.");
+          return;
+        }
+
+        if (action === "delete-event") {
+          const approved = window.confirm("Delete all custom mechanics for this event and restore defaults?");
+          if (!approved) {
+            return;
+          }
+
+          const deleteResult = await deleteEventMechanics(eventId);
+          if (!deleteResult.ok) {
+            const deleteMessage = deleteResult.payload && deleteResult.payload.message
+              ? deleteResult.payload.message
+              : "Unable to delete event mechanics right now.";
+            showToast(deleteMessage);
+            return;
+          }
+
+          delete mechanicsOverridesByEventId[eventId];
+          endMechanicsEdit(eventId);
+          await showSelectedEventDetails(eventId);
+          showToast("Custom mechanics deleted. Defaults restored.");
+          return;
+        }
+
+        if (!isMechanicsEditMode(eventId)) {
+          showToast("Enable edit mode first.");
+          return;
+        }
+
+        const editorState = collectMechanicsEditorState(eventId);
+        let nextSections = editorState.sections.slice();
+        let nextVenue = editorState.venue;
+
+        if (action === "add") {
+          nextSections.push({
+            id: "section-" + String(Date.now()),
+            title: "New Section",
+            contentHtml: "<p>Update this section.</p>",
+          });
+        } else if (action === "move") {
+          const fromIndex = promptSectionIndex(nextSections, "Select section to move");
+          if (fromIndex < 0) {
+            return;
+          }
+
+          const toPrompt = window.prompt("Enter new position (1-" + String(nextSections.length) + "):");
+          if (!toPrompt) {
+            return;
+          }
+
+          const toIndexRaw = Number.parseInt(toPrompt, 10);
+          if (!Number.isInteger(toIndexRaw) || toIndexRaw < 1 || toIndexRaw > nextSections.length) {
+            showToast("Invalid section position.");
+            return;
+          }
+
+          const toIndex = toIndexRaw - 1;
+          if (toIndex === fromIndex) {
+            return;
+          }
+
+          const moving = nextSections[fromIndex];
+          nextSections.splice(fromIndex, 1);
+          nextSections.splice(toIndex, 0, moving);
+        } else if (action === "delete") {
+          const sectionIndex = promptSectionIndex(nextSections, "Select section to delete");
+          if (sectionIndex < 0) {
+            return;
+          }
+
+          const approved = window.confirm("Delete this section? This action cannot be undone.");
+          if (!approved) {
+            return;
+          }
+
+          nextSections.splice(sectionIndex, 1);
+        } else if (action === "save") {
+          const normalizedSections = normalizeMechanicsSections(nextSections);
+          const normalizedVenue = normalizeVenueText(nextVenue || "");
+          if (!normalizedSections.length && !normalizedVenue) {
+            showToast("Please provide at least one section or a venue.");
+            return;
+          }
+
+          const saveResult = await saveEventMechanics(eventId, normalizedSections, normalizedVenue);
+          if (!saveResult.ok) {
+            const message = saveResult.payload && saveResult.payload.message
+              ? saveResult.payload.message
+              : "Unable to update mechanics right now.";
+            showToast(message);
+            return;
+          }
+
+          const normalizedSavePayload = normalizeMechanicsPayload(saveResult.payload);
+          mechanicsOverridesByEventId[eventId] = {
+            venue: normalizeVenueText(normalizedSavePayload.venue || normalizedVenue || ""),
+            sections: normalizedSavePayload.sections.length ? normalizedSavePayload.sections : normalizedSections,
+            updatedAt: normalizedSavePayload.updatedAt || new Date().toISOString(),
+          };
+
+          console.debug("[mechanics] save result", {
+            eventId,
+            responseStatus: saveResult.status,
+            responsePayload: saveResult.payload,
+            normalizedVenue: mechanicsOverridesByEventId[eventId].venue,
+            normalizedSectionsCount: mechanicsOverridesByEventId[eventId].sections.length,
+          });
+
+          let refreshedEntry = null;
+          try {
+            refreshedEntry = await fetchEventMechanics(eventId);
+          } catch (error) {
+            console.error("[mechanics] Refresh after save failed.", error);
+          }
+
+          if (!refreshedEntry) {
+            mechanicsOverridesByEventId[eventId] = {
+              venue: normalizeVenueText(nextVenue || ""),
+              sections: normalizedSections,
+              updatedAt: new Date().toISOString(),
+            };
+          }
+
+          endMechanicsEdit(eventId);
+          try {
+            await showSelectedEventDetails(eventId, { skipMechanicsFetch: true });
+          } catch (error) {
+            console.error("[mechanics] Rendering after save failed.", error);
+            const fallbackDetails = getEventDetailsById(eventId);
+            renderMechanicsReadOnly(fallbackDetails);
+          }
+          showToast("Mechanics updated successfully.");
+          return;
+        } else {
+          return;
+        }
+
+        nextSections = normalizeMechanicsSections(nextSections);
+        if (!nextSections.length) {
+          showToast("At least one section is required.");
+          return;
+        }
+
+        setMechanicsEditState(eventId, {
+          isEditing: true,
+          originalVenue: nextVenue,
+          originalSections: nextSections,
+        });
+        renderMechanicsEditMode(eventId);
+        renderMechanicsAdminControls(eventId);
       }
 
       function getEventSelectionContextFromTarget(target) {
@@ -3528,15 +4241,53 @@
         }
       }
 
-      function showSelectedEventDetails(eventId) {
-        const details = getEventDetailsById(eventId);
+      async function showSelectedEventDetails(eventId, options) {
+        const config = options && typeof options === "object" ? options : {};
+        const skipMechanicsFetch = Boolean(config.skipMechanicsFetch);
+
+        if (!skipMechanicsFetch) {
+          try {
+            await fetchEventMechanics(eventId);
+          } catch (error) {
+            console.error("[mechanics] Unable to fetch latest mechanics.", error);
+            // Keep defaults when backend mechanics lookup is unavailable.
+          }
+        }
+
+        let details = getEventDetailsById(eventId);
         if (!teaserTitle || !teaserVenue || !teaserMechanics) {
           return;
         }
 
+        if (!details || typeof details !== "object") {
+          details = {
+            eventId,
+            title: "Event Details",
+            venue: "To be announced",
+            registrationType: "none",
+            mechanicsHtml: "<p>Mechanics will be announced soon.</p>",
+          };
+        }
+
+        if (typeof details.mechanicsHtml !== "string" || !details.mechanicsHtml.trim()) {
+          details.mechanicsHtml = convertMechanicsSectionsToHtml(getMechanicsSectionsForEvent(eventId));
+        }
+
+        console.debug("[mechanics] rendering details", {
+          eventId,
+          skipMechanicsFetch,
+          venue: details.venue,
+          mechanicsLength: details.mechanicsHtml.length,
+          hasOverride: Boolean(mechanicsOverridesByEventId[eventId]),
+        });
+
         teaserTitle.textContent = details.title;
-        teaserVenue.textContent = details.venue;
-        teaserMechanics.innerHTML = details.mechanicsHtml;
+        if (isMechanicsEditMode(eventId)) {
+          renderMechanicsEditMode(eventId);
+        } else {
+          renderMechanicsReadOnly(details);
+        }
+        renderMechanicsAdminControls(eventId);
         renderEventRegistration(details);
         teaserModal.dataset.activeEventId = details.eventId;
         teaserModal.dataset.activeEventTitle = details.title;
@@ -3801,8 +4552,20 @@
           if (selectEventButton instanceof HTMLElement) {
             const selectedEventId = selectEventButton.dataset.eventId || "";
             if (selectedEventId) {
-              showSelectedEventDetails(selectedEventId);
+              await showSelectedEventDetails(selectedEventId);
             }
+            return;
+          }
+
+          const mechanicsActionButton = target.closest("[data-mechanics-action]");
+          if (mechanicsActionButton instanceof HTMLElement) {
+            const action = mechanicsActionButton.dataset.mechanicsAction || "";
+            const eventId = getActiveEventId();
+            if (!eventId) {
+              return;
+            }
+
+            await handleMechanicsAction(action, eventId);
             return;
           }
 

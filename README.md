@@ -29,6 +29,7 @@ No local Express server is required in production.
    - supabase/migrations/20260404_it_quiz_bee_registration_support.sql
    - supabase/migrations/20260404_chess_tournament_registration_support.sql
    - supabase/migrations/20260408_codm_three_squads_support.sql
+   - supabase/migrations/20260408_event_mechanics_management.sql
 3. In Database -> Replication, ensure Realtime is enabled for:
    - public.event_votes
    - public.event_registrations

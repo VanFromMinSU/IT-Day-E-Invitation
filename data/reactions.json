@@ -1,5 +1,18 @@
 {
   "votes": {},
   "registrations": [],
-  "updatedAt": "2026-03-28T00:00:00.000Z"
+  "mechanics": {
+    "codm": {
+      "venue": "Post Save Render Test",
+      "sections": [
+        {
+          "id": "section-1",
+          "title": "Gameplay Format",
+          "contentHtml": "<p>Live update check</p>"
+        }
+      ],
+      "updatedAt": "2026-04-08T11:11:46.925Z"
+    }
+  },
+  "updatedAt": "2026-04-08T11:11:46.925Z"
 }
