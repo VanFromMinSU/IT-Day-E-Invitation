@@ -65,7 +65,7 @@
           },
         })
         : null;
-      const registrationEventIds = new Set(["chess-tournament", "rubiks-cube-competition", "sudoku-game-easy-level", "it-quiz-bee", "codm-tournament", "mobile-legends-tournament", "fast-typing", "crimping-competition", "assembling-and-disassembling-competition", "battle-of-the-bands", "basketball-half-court"]);
+      const registrationEventIds = new Set(["chess-tournament", "rubiks-cube-competition", "sudoku-game-easy-level", "it-quiz-bee", "codm-tournament", "mobile-legends-tournament", "fast-typing", "crimping-competition", "assembling-and-disassembling-competition", "battle-of-the-bands", "basketball-half-court", "mr-and-ms-it-2026"]);
       let isAdminAuthorized = false;
       let isAdminModeRequested = false;
       let isAdminTokenAuthorized = false;
@@ -608,6 +608,71 @@
             '<tr><td>Performance (stage presence, style)</td><td>30%</td></tr>' +
             '<tr><td>Technical Skills (instrument handling)</td><td>10%</td></tr>' +
             '<tr><td>Overall Impact (including interpretation)</td><td>10%</td></tr>' +
+            '</tbody>' +
+            '<tfoot><tr><td><strong>Total</strong></td><td><strong>100%</strong></td></tr></tfoot>' +
+            '</table>',
+        },
+        "mr-and-ms-it-2026": {
+          eventId: "mr-and-ms-it-2026",
+          title: "Mr. and Ms. IT 2026",
+          venue: "Main Stage",
+          registrationType: "team",
+          mechanicsHtml:
+            '<h5>MR. AND MS. IT 2026 OFFICIAL MECHANICS AND JUDGING CRITERIA</h5>' +
+            '<h5>OVERVIEW</h5>' +
+            '<p>This competition aims to recognize outstanding individuals who embody excellence in both technical knowledge and professional presence within the information technology sector. Participants represent designated AI Families, with each family fielding one Mr. IT and one Ms. IT candidate. The event showcases creativity, professionalism, talent, and critical thinking through five competitive segments.</p>' +
+            '<h5>SEGMENT MECHANICS</h5>' +
+            '<p><strong>1. PRODUCTION SEGMENT (COSPLAY) - 20% of Total Score</strong></p>' +
+            '<p><strong>Theme:</strong> AI Family Identity</p>' +
+            '<p><strong>Core Requirement:</strong> All cosplay costumes must be crafted primarily from recycled materials to promote sustainability alongside technological innovation.</p>' +
+            '<ul>' +
+            '<li><strong>Group Intermission Performance:</strong> All candidates (paired by AI Family) will perform a synchronized group intermission number on stage to introduce their family themes and set the tone for individual presentations.</li>' +
+            '<li><strong>Costume Presentation:</strong> After the group performance, each AI Family\'s Mr. and Ms. IT representatives will take the stage together to showcase their custom cosplay costumes. All pairs will ramp simultaneously to highlight cohesive design language.</li>' +
+            '<li><strong>Individual Introduction:</strong> Each candidate will deliver a 30-second individual introduction connecting their costume design to their AI Family\'s name, values, and relevance to modern information technology.</li>' +
+            '<li><strong>Additional Guidelines:</strong> Costumes must be safe for stage movement, with no sharp or hazardous components. Any non-recycled materials used must not exceed 10% of total costume composition, as verified by organizers prior to competition.</li>' +
+            '</ul>' +
+            '<p><strong>2. IT CORPORATE ATTIRE SEGMENT - 15% of Total Score</strong></p>' +
+            '<p><strong>Theme:</strong> Professionalism in the Digital Workplace</p>' +
+            '<p><strong>Core Requirement:</strong> Attire must reflect contemporary standards for IT industry professionals, balancing formality, functionality, and personal style.</p>' +
+            '<ul>' +
+            '<li><strong>Paired Ramp:</strong> Candidates will first present IT corporate uniforms in designated AI Family pairs. Each pair has a 45-second presentation slot.</li>' +
+            '<li><strong>Group Runway Showcase:</strong> After paired presentations, all candidates will emerge simultaneously for a full-group runway to assess overall presentation consistency.</li>' +
+            '<li><strong>Attire Specifications:</strong> Corporate attire may include tailored blazers, collared shirts, trousers, skirts, or modern tech-friendly ensembles. Footwear must be professional, accessories minimal, and grooming aligned with IT workplace standards.</li>' +
+            '</ul>' +
+            '<p><strong>3. TALENT SEGMENT - 15% of Total Score</strong></p>' +
+            '<p><strong>Theme:</strong> Innovation and Skill Demonstration</p>' +
+            '<p><strong>Core Requirement:</strong> Performances must be presented exclusively by paired candidates. External backup participants are strictly prohibited.</p>' +
+            '<ul>' +
+            '<li><strong>Paired Performance:</strong> Each AI Family pair presents a pre-prepared talent piece with a maximum duration of 5 minutes. IT or AI themed acts are encouraged.</li>' +
+            '<li><strong>Penalty for External Participants:</strong> If external backup participants are involved, a 25% deduction applies to the pair\'s total segment score. Unauthorized participation may result in disqualification from this segment.</li>' +
+            '<li><strong>Performance Guidelines:</strong> Acts must be suitable for a professional audience and must not contain offensive content. Technical requirements (audio, lighting, props) must be submitted at least one week in advance for approval and planning.</li>' +
+            '</ul>' +
+            '<p><strong>4. LONG GOWN AND TUXEDO/SUIT SEGMENT - 20% of Total Score</strong></p>' +
+            '<p><strong>Theme:</strong> Formal Elegance and Professional Grace</p>' +
+            '<p><strong>Core Requirement:</strong> Attire must be formal, well-tailored, and appropriate for a high-level industry gala or awards ceremony.</p>' +
+            '<ul>' +
+            '<li><strong>Paired Ramp:</strong> Candidates begin by presenting formal attire in pairs, with 45 seconds per pair.</li>' +
+            '<li><strong>Individual Solo Ramp:</strong> After the paired segment, each candidate returns for a 30-second solo ramp to assess fit, style, and personal poise.</li>' +
+            '<li><strong>Attire Specifications:</strong> Ms. IT candidates must wear full-length long gowns. Mr. IT candidates must wear tuxedos or formal tailored suits. IT/AI-themed customizations are permitted if formal elegance is maintained. Grooming must be polished and black-tie appropriate.</li>' +
+            '</ul>' +
+            '<p><strong>5. QUESTION AND ANSWER SEGMENT - 30% of Total Score</strong></p>' +
+            '<p><strong>Format:</strong> Random Judge Assignment</p>' +
+            '<p><strong>Core Requirement:</strong> Candidates respond to questions related to IT, AI, industry trends, or professional development while in formal attire.</p>' +
+            '<ul>' +
+            '<li><strong>Question Assignment Process:</strong> Each candidate draws a slip from a designated bowl indicating the specific judge who will ask the question to ensure impartiality and equal opportunity.</li>' +
+            '<li><strong>Time Allocation:</strong> Candidates receive 10 seconds to prepare after the question, followed by a 60-second response time. A warning bell sounds at 50 seconds, and speaking must stop at 60 seconds.</li>' +
+            '<li><strong>Question Scope:</strong> Questions cover emerging technologies, IT ethics, career development in the digital age, and bridging technology gaps in communities. Candidates are encouraged to draw from personal experience and industry knowledge.</li>' +
+            '<li><strong>Guidelines:</strong> Responses must be clear, concise, and respectful. Pre-written notes and external materials are not allowed during this segment.</li>' +
+            '</ul>' +
+            '<h5>CRITERIA FOR JUDGING</h5>' +
+            '<table class="event-criteria-table">' +
+            '<thead><tr><th>Segment</th><th>Percentage</th></tr></thead>' +
+            '<tbody>' +
+            '<tr><td>Production Segment (Cosplay)</td><td>20%</td></tr>' +
+            '<tr><td>IT Corporate Attire Segment</td><td>15%</td></tr>' +
+            '<tr><td>Talent Segment</td><td>15%</td></tr>' +
+            '<tr><td>Long Gown and Tuxedo/Suit Segment</td><td>20%</td></tr>' +
+            '<tr><td>Question and Answer Segment</td><td>30%</td></tr>' +
             '</tbody>' +
             '<tfoot><tr><td><strong>Total</strong></td><td><strong>100%</strong></td></tr></tfoot>' +
             '</table>',
@@ -3350,7 +3415,7 @@
       }
 
       function getRegistrationClosedValidationMessage(eventId) {
-        if (eventId === "chess-tournament" || eventId === "codm-tournament" || eventId === "mobile-legends-tournament" || eventId === "battle-of-the-bands" || eventId === "basketball-half-court" || eventId === "it-quiz-bee") {
+        if (eventId === "chess-tournament" || eventId === "codm-tournament" || eventId === "mobile-legends-tournament" || eventId === "battle-of-the-bands" || eventId === "basketball-half-court" || eventId === "it-quiz-bee" || eventId === "mr-and-ms-it-2026") {
           return "Registration is now closed. Maximum teams reached.";
         }
 
@@ -3372,6 +3437,10 @@
       function getTeamLimitValidationMessage(eventId) {
         if (eventId === "battle-of-the-bands") {
           return "Only one (1) band registration is allowed per family.";
+        }
+
+        if (eventId === "mr-and-ms-it-2026") {
+          return "Only one (1) Mr. and Ms. IT pair registration is allowed per family.";
         }
 
         if (eventId === "basketball-half-court") {
@@ -3500,6 +3569,26 @@
             hideCaptainField: true,
             captainDefaultValue: "Team Representative",
             excludeCaptainFromSize: true,
+          };
+        }
+
+        if (eventId === "mr-and-ms-it-2026") {
+          return {
+            maxMembers: 1,
+            defaultMemberRows: 1,
+            requireCompleteMemberFields: true,
+            requiresExactMembers: true,
+            exactMembers: 1,
+            maxTotalParticipants: 2,
+            minTotalParticipants: 2,
+            sizeMessage: "Each family must register exactly one (1) Mr. IT and one (1) Ms. IT candidate.",
+            familyLabel: "Family",
+            captainLabel: "Mr. IT",
+            captainPlaceholder: "Enter Mr. IT candidate name",
+            membersHeading: "Ms. IT",
+            memberLabels: ["Ms. IT"],
+            fixedMemberFields: true,
+            allowMemberControls: false,
           };
         }
 
@@ -3816,6 +3905,23 @@
                       .map((member) => '<li class="event-registered-team-member">' + escapeHtml(member) + "</li>")
                       .join("")
                     : '<li class="event-registered-team-member">No members listed.</li>';
+
+                  if (eventId === "mr-and-ms-it-2026") {
+                    const msItName = members[0] && members[0].trim() ? members[0].trim() : "TBA";
+
+                    return (
+                      '<li class="event-registered-team">' +
+                      '<div class="event-registered-team__header">' +
+                      '<span class="event-registered-team__title">Mr. IT: ' + escapeHtml(captain || "TBA") + "</span>" +
+                      (cancelButtonMarkup ? '<span class="event-registered-entry-actions">' + cancelButtonMarkup + "</span>" : "") +
+                      "</div>" +
+                      '<div class="event-registered-team__members event-registered-team__members--plain">' +
+                      '<span class="event-registered-team__title">Ms. IT: ' + escapeHtml(msItName) + "</span>" +
+                      "</div>" +
+                      "</li>"
+                    );
+                  }
+
                   const teamTitle = eventId === "chess-tournament"
                     ? escapeHtml(teamLabel)
                     : escapeHtml(teamLabel) + " (Captain: " + escapeHtml(captain || "TBA") + ")";
@@ -4388,9 +4494,39 @@
           return;
         }
 
+        if (details.eventId === "mr-and-ms-it-2026") {
+          teaserRegistration.innerHTML =
+            '<form class="event-registration-form" data-registration-type="team" novalidate>' +
+            '<div class="event-form-grid">' +
+            '<div class="event-form-field">' +
+            '<label for="event-family">Family</label>' +
+            '<select id="event-family" name="family" required><option value="">Select family</option>' +
+            buildFamilyOptionsMarkup() +
+            "</select>" +
+            "</div>" +
+            "</div>" +
+            '<div class="event-form-field">' +
+            '<label for="event-captain">Mr. IT</label>' +
+            '<input id="event-captain" name="captain" type="text" autocomplete="name" placeholder="Enter Mr. IT candidate name" required />' +
+            "</div>" +
+            '<div class="event-form-field">' +
+            '<label for="event-ms-it">Ms. IT</label>' +
+            '<input id="event-ms-it" name="members[]" type="text" autocomplete="name" placeholder="Enter Ms. IT candidate name" required />' +
+            "</div>" +
+            '<div class="event-registration-status" data-registration-status="true" aria-live="polite"></div>' +
+            '<div class="event-registered-participants" data-registered-participants="true" aria-live="polite"></div>' +
+            '<p class="event-form-feedback" aria-live="polite"></p>' +
+            '<div class="registration-actions event-form-actions">' +
+            '<button type="submit" class="btn btn-primary">Submit Registration</button>' +
+            "</div>" +
+            "</form>";
+          return;
+        }
+
         const teamRules = getTeamRegistrationRules(details.eventId);
         const familyLabel = teamRules.familyLabel || "Family";
         const captainLabel = teamRules.captainLabel || "Team Captain";
+        const captainPlaceholder = teamRules.captainPlaceholder || "Enter captain/leader name";
         const hideCaptainField = Boolean(teamRules.hideCaptainField);
         const defaultCaptainValue = teamRules.captainDefaultValue || "Team Representative";
         const membersHeading = teamRules.membersHeading || "Members";
@@ -4404,7 +4540,7 @@
           ? '<input id="event-captain" name="captain" type="hidden" value="' + escapeHtml(defaultCaptainValue) + '" />'
           : '<div class="event-form-field">' +
             '<label for="event-captain">' + escapeHtml(captainLabel) + '</label>' +
-            '<input id="event-captain" name="captain" type="text" autocomplete="name" placeholder="Enter captain/leader name" required />' +
+            '<input id="event-captain" name="captain" type="text" autocomplete="name" placeholder="' + escapeHtml(captainPlaceholder) + '" required />' +
             '</div>';
 
         teaserRegistration.innerHTML =
@@ -4793,6 +4929,8 @@
             if (!captain) {
               const captainMessage = activeEventId === "it-quiz-bee"
                 ? "Please enter the watcher name."
+                : activeEventId === "mr-and-ms-it-2026"
+                  ? "Please enter the Mr. IT candidate name."
                 : "Please enter the captain/leader name.";
               setEventFormFeedback(form, captainMessage, true);
               return;

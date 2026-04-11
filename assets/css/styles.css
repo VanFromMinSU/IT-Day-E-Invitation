@@ -710,6 +710,10 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .guests-grid--stacked {
+      grid-template-columns: 1fr;
+    }
+
     .guest-card {
       background: linear-gradient(160deg, rgba(10, 22, 19, 0.82), rgba(8, 15, 14, 0.72));
       border: 1px solid rgba(133, 255, 159, 0.2);
@@ -772,6 +776,51 @@
     .guest-list li:last-child {
       border-bottom: none;
       padding-bottom: 0;
+    }
+
+    .guest-subsections {
+      display: grid;
+      gap: 0.75rem;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .guest-subsection {
+      display: grid;
+      gap: 0.38rem;
+      padding: 0;
+      border-top: none;
+    }
+
+    .guest-subsection-card {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      background: rgba(8, 15, 14, 0.52);
+      border: 1px solid rgba(133, 255, 159, 0.14);
+      border-radius: 14px;
+      padding: 0.82rem;
+      box-shadow: inset 0 0 0 1px rgba(64, 240, 255, 0.03);
+    }
+
+    .guest-subsection-title {
+      margin: 0;
+      min-height: 2.4em;
+      color: var(--cyan-300);
+      font-size: 0.88rem;
+      line-height: 1.2;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .guest-subsection-card .guest-list {
+      flex: 1;
+    }
+
+    @media (min-width: 981px) {
+      .guest-subsection-title {
+        min-height: 3.1rem;
+      }
     }
 
     .cta-section {
@@ -1394,6 +1443,12 @@
       gap: 0.1rem;
     }
 
+    .event-registered-team__members--plain {
+      padding-left: 0;
+      list-style: none;
+      gap: 0;
+    }
+
     .event-registered-entry-actions {
       display: inline-flex;
       align-items: center;
@@ -1604,6 +1659,14 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
+      .guests-grid--stacked {
+        grid-template-columns: 1fr;
+      }
+
+      .guest-subsections {
+        grid-template-columns: 1fr;
+      }
+
       .timeline-wrap {
         grid-template-columns: 1fr;
       }
@@ -1641,6 +1704,10 @@
       .cards-grid,
       .family-logo-list,
       .guests-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .guest-subsections {
         grid-template-columns: 1fr;
       }
 
@@ -1705,6 +1772,19 @@
       .timeline-badge {
         margin-left: 0;
         margin-top: 0.35rem;
+      }
+
+      .guest-subsections {
+        gap: 0.7rem;
+      }
+
+      .guest-subsection {
+        gap: 0.32rem;
+        padding-top: 0.3rem;
+      }
+
+      .guest-list {
+        gap: 0.7rem;
       }
 
       .app-toast {

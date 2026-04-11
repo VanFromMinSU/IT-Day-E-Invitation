@@ -26,6 +26,7 @@ const REGISTRATION_EVENT_IDS = new Set([
   "assembling-and-disassembling-competition",
   "battle-of-the-bands",
   "basketball-half-court",
+  "mr-and-ms-it-2026",
 ]);
 const INDIVIDUAL_EVENT_IDS = new Set([
   "rubiks-cube-competition",
@@ -34,7 +35,7 @@ const INDIVIDUAL_EVENT_IDS = new Set([
   "crimping-competition",
   "assembling-and-disassembling-competition",
 ]);
-const TEAM_EVENT_IDS = new Set(["chess-tournament", "it-quiz-bee", "codm-tournament", "mobile-legends-tournament", "battle-of-the-bands", "basketball-half-court"]);
+const TEAM_EVENT_IDS = new Set(["chess-tournament", "it-quiz-bee", "codm-tournament", "mobile-legends-tournament", "battle-of-the-bands", "basketball-half-court", "mr-and-ms-it-2026"]);
 const FAMILY_OPTIONS = ["Family 1 - Claude", "Family 2 - Grok", "Family 3 - Gemini", "Family 4 - Dola"];
 const FAMILY_TEAM_PREFIX = {
   "Family 1 - Claude": "A",
@@ -58,6 +59,7 @@ const EVENT_TITLE_MAP = {
   "assembling-and-disassembling-competition": "Assembling and Disassembling Competition",
   "battle-of-the-bands": "Battle of the Bands",
   "basketball-half-court": "Basketball (Men's Half Court)",
+  "mr-and-ms-it-2026": "Mr. and Ms. IT 2026",
 };
 
 function getIndividualRegistrationConfig(eventId) {
@@ -151,6 +153,18 @@ function getTeamRegistrationConfig(eventId) {
       minTotalParticipants: 3,
       familyLimit: 1,
       maxTeams: FAMILY_OPTIONS.length * 2,
+    };
+  }
+
+  if (eventId === "mr-and-ms-it-2026") {
+    return {
+      requiresExactMembers: true,
+      maxMembers: 1,
+      minMembers: 1,
+      maxTotalParticipants: 2,
+      minTotalParticipants: 2,
+      familyLimit: 1,
+      maxTeams: FAMILY_OPTIONS.length,
     };
   }
 
@@ -492,6 +506,10 @@ function getTeamLimitMessage(eventId) {
     return "Only one (1) band registration is allowed per family.";
   }
 
+  if (eventId === "mr-and-ms-it-2026") {
+    return "Only one (1) Mr. and Ms. IT pair registration is allowed per family.";
+  }
+
   if (eventId === "chess-tournament") {
     return "Only one (1) team registration is allowed per family.";
   }
@@ -518,6 +536,10 @@ function getRegistrationClosedMessage(eventId) {
 function getTeamSizeMessage(eventId) {
   if (eventId === "chess-tournament") {
     return "Each team must include exactly two (2) male and two (2) female participants.";
+  }
+
+  if (eventId === "mr-and-ms-it-2026") {
+    return "Each family must register exactly one (1) Mr. IT and one (1) Ms. IT candidate.";
   }
 
   if (eventId === "mobile-legends-tournament") {
@@ -1278,7 +1300,11 @@ app.post("/api/event-registrations", async (req, res) => {
             data: {
               status: 400,
               error: "invalid_payload",
-              message: eventId === "it-quiz-bee" ? "Please enter the watcher name." : "Please enter the captain/leader name.",
+              message: eventId === "it-quiz-bee"
+                ? "Please enter the watcher name."
+                : eventId === "mr-and-ms-it-2026"
+                  ? "Please enter the Mr. IT candidate name."
+                  : "Please enter the captain/leader name.",
             },
           };
         }
