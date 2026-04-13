@@ -152,12 +152,12 @@
 
     .primary-menu-toggle__icon {
       position: relative;
-      width: 0.26rem;
-      height: 0.26rem;
-      border-radius: 50%;
+      width: 1rem;
+      height: 0.14rem;
+      border-radius: 999px;
       background: currentColor;
       display: block;
-      box-shadow: -0.42rem 0 0 currentColor, 0.42rem 0 0 currentColor;
+      box-shadow: 0 -0.34rem 0 currentColor, 0 0.34rem 0 currentColor;
     }
 
     .primary-menu-panel {
