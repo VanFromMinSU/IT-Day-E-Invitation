@@ -27,14 +27,24 @@
   <header class="site-header" role="banner">
     <div class="nav-wrap">
       <a href="#home" class="brand">MinSU IT Day 2026</a>
-      <nav aria-label="Primary navigation">
-        <ul>
-          <li><a href="#about">About</a></li>
-          <li><a href="#highlights">Highlights</a></li>
-          <li><a href="#schedule">Schedule</a></li>
-          <li><a href="#guests">Guests</a></li>
-          <li><a href="#register">Register</a></li>
-        </ul>
+      <nav class="primary-menu" aria-label="Primary navigation">
+        <button
+          id="primary-menu-button"
+          class="primary-menu-toggle"
+          type="button"
+          aria-label="Open primary navigation menu"
+          aria-expanded="false"
+          aria-controls="primary-menu-panel"
+        >
+          <span class="primary-menu-toggle__icon" aria-hidden="true"></span>
+        </button>
+        <div id="primary-menu-panel" class="primary-menu-panel" role="menu" aria-hidden="true">
+          <a href="#about" role="menuitem" tabindex="-1">About</a>
+          <a href="#highlights" role="menuitem" tabindex="-1">Highlights</a>
+          <a href="#schedule" role="menuitem" tabindex="-1">Schedule</a>
+          <a href="#guests" role="menuitem" tabindex="-1">Guests</a>
+          <a href="#register" role="menuitem" tabindex="-1">Register</a>
+        </div>
       </nav>
     </div>
   </header>
@@ -459,7 +469,10 @@
       <strong>Mindoro State University - Main Campus</strong>
       <span>College of Computing Studies (IT/CCS Department)</span>
       <div class="socials" aria-label="Social links">
-        <a href="https://www.facebook.com/mindorostateuccs" id="facebook-button" target="_blank" rel="noopener noreferrer">Facebook</a>
+        <a href="https://www.facebook.com/mindorostateuccs" id="facebook-button" class="social-link social-link--facebook" target="_blank" rel="noopener noreferrer">
+          <img src="logo/facebook-icon.webp" alt="" aria-hidden="true" class="social-link__icon" />
+          <span>Facebook</span>
+        </a>
         <a href="#" id="official-website-button">Official Website</a>
         <a href="#" id="contact-office-button">Contact Office</a>
       </div>

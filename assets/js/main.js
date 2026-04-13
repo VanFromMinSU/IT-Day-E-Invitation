@@ -14,6 +14,8 @@
       const teaserVenue = document.getElementById("teaser-venue");
       const teaserMechanics = document.getElementById("teaser-mechanics");
       const teaserRegistration = document.getElementById("teaser-registration");
+      const primaryMenuButton = document.getElementById("primary-menu-button");
+      const primaryMenuPanel = document.getElementById("primary-menu-panel");
       const appToast = document.getElementById("app-toast");
       const countdownChip = document.getElementById("countdown-chip");
       const appConfig = window.APP_CONFIG && typeof window.APP_CONFIG === "object" ? window.APP_CONFIG : {};
@@ -808,6 +810,93 @@
         toastTimer = setTimeout(() => {
           appToast.classList.remove("is-visible");
         }, 2600);
+      }
+
+      function getPrimaryMenuLinks() {
+        if (!(primaryMenuPanel instanceof HTMLElement)) {
+          return [];
+        }
+
+        return Array.from(primaryMenuPanel.querySelectorAll('a[role="menuitem"]'));
+      }
+
+      function setPrimaryMenuFocusable(isOpen) {
+        const links = getPrimaryMenuLinks();
+        links.forEach((link) => {
+          if (link instanceof HTMLAnchorElement) {
+            link.tabIndex = isOpen ? 0 : -1;
+          }
+        });
+      }
+
+      function openPrimaryMenu() {
+        if (!(primaryMenuButton instanceof HTMLButtonElement) || !(primaryMenuPanel instanceof HTMLElement)) {
+          return;
+        }
+
+        primaryMenuButton.classList.add("is-open");
+        primaryMenuButton.setAttribute("aria-expanded", "true");
+        primaryMenuButton.setAttribute("aria-label", "Close primary navigation menu");
+        primaryMenuPanel.hidden = false;
+        primaryMenuPanel.classList.add("is-open");
+        primaryMenuPanel.setAttribute("aria-hidden", "false");
+        setPrimaryMenuFocusable(true);
+
+        const firstLink = getPrimaryMenuLinks()[0];
+        if (firstLink instanceof HTMLAnchorElement) {
+          firstLink.focus();
+        }
+      }
+
+      function closePrimaryMenu(returnFocus) {
+        if (!(primaryMenuButton instanceof HTMLButtonElement) || !(primaryMenuPanel instanceof HTMLElement)) {
+          return;
+        }
+
+        primaryMenuButton.classList.remove("is-open");
+        primaryMenuButton.setAttribute("aria-expanded", "false");
+        primaryMenuButton.setAttribute("aria-label", "Open primary navigation menu");
+        primaryMenuPanel.classList.remove("is-open");
+        primaryMenuPanel.setAttribute("aria-hidden", "true");
+        setPrimaryMenuFocusable(false);
+
+        window.setTimeout(() => {
+          if (!primaryMenuPanel.classList.contains("is-open")) {
+            primaryMenuPanel.hidden = true;
+          }
+        }, 220);
+
+        if (returnFocus) {
+          primaryMenuButton.focus();
+        }
+      }
+
+      function togglePrimaryMenu() {
+        if (!(primaryMenuButton instanceof HTMLButtonElement) || !(primaryMenuPanel instanceof HTMLElement)) {
+          return;
+        }
+
+        if (primaryMenuPanel.classList.contains("is-open")) {
+          closePrimaryMenu(true);
+        } else {
+          openPrimaryMenu();
+        }
+      }
+
+      if (primaryMenuButton instanceof HTMLButtonElement && primaryMenuPanel instanceof HTMLElement) {
+        primaryMenuPanel.hidden = true;
+        setPrimaryMenuFocusable(false);
+
+        primaryMenuButton.addEventListener("click", () => {
+          togglePrimaryMenu();
+        });
+
+        primaryMenuPanel.addEventListener("click", (event) => {
+          const target = event.target;
+          if (target instanceof HTMLAnchorElement) {
+            closePrimaryMenu(false);
+          }
+        });
       }
 
       function triggerTapFeedback(target) {
@@ -5041,9 +5130,16 @@
           return;
         }
 
-        const feedbackTarget = target.closest(".btn, .event-selection-option, .event-member-remove, .registration-close, .interactive-event, nav a, .socials a, .brand");
+        const feedbackTarget = target.closest(".btn, .event-selection-option, .event-member-remove, .registration-close, .interactive-event, nav a, .socials a, .brand, .primary-menu-toggle, .primary-menu-panel a");
         if (feedbackTarget instanceof HTMLElement) {
           triggerTapFeedback(feedbackTarget);
+        }
+
+        if (primaryMenuButton instanceof HTMLButtonElement && primaryMenuPanel instanceof HTMLElement) {
+          const clickedInsideMenu = target.closest(".primary-menu");
+          if (!clickedInsideMenu && primaryMenuPanel.classList.contains("is-open")) {
+            closePrimaryMenu(false);
+          }
         }
       });
 
@@ -5066,6 +5162,11 @@
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape" && teaserModal && teaserModal.classList.contains("is-open")) {
           closeTeaserModal();
+          return;
+        }
+
+        if (event.key === "Escape" && primaryMenuPanel instanceof HTMLElement && primaryMenuPanel.classList.contains("is-open")) {
+          closePrimaryMenu(true);
         }
       });
 
