@@ -196,7 +196,10 @@ begin
   elsif normalized_event = 'mr-and-ms-it-2026' then
     team_family_limit := 1;
     team_max_teams := 4;
-  elsif normalized_event in ('codm-tournament', 'mobile-legends-tournament') then
+  elsif normalized_event = 'codm-tournament' then
+    team_family_limit := 3;
+    team_max_teams := 12;
+  elsif normalized_event = 'mobile-legends-tournament' then
     team_family_limit := 2;
     team_max_teams := 8;
   end if;
@@ -412,7 +415,10 @@ begin
   elsif normalized_event = 'mr-and-ms-it-2026' then
     team_family_limit := 1;
     team_max_teams := 4;
-  elsif normalized_event in ('codm-tournament', 'mobile-legends-tournament') then
+  elsif normalized_event = 'codm-tournament' then
+    team_family_limit := 3;
+    team_max_teams := 12;
+  elsif normalized_event = 'mobile-legends-tournament' then
     team_family_limit := 2;
     team_max_teams := 8;
   end if;

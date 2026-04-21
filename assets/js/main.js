@@ -132,7 +132,7 @@
           ],
         },
         esports: {
-          label: "Esports Showdown",
+          label: "Esports Competition",
           eventIds: ["mobile-legends-tournament", "codm-tournament"],
         },
         "sports-fun": {
@@ -146,6 +146,26 @@
         "main-stage": {
           label: "Main Stage Highlights",
           eventIds: ["battle-of-the-bands", "mr-and-ms-it-2026"],
+        },
+        "day1-opening-program-slot": {
+          label: "Parade and Opening Program",
+          eventIds: ["parade-brass-band", "opening-ceremony", "program-proper", "flag-raising", "invocation", "minsu-hymn", "opening-remarks", "competition-announcement", "hip-hop-competition"],
+        },
+        "day1-competitions-begin-slot": {
+          label: "Competitions Begin",
+          eventIds: ["programming-java", "programming-python", "programming-csharp", "programming-sql", "crimping-competition", "fast-typing", "assembling-and-disassembling-competition", "mobile-legends-tournament"],
+        },
+        "day1-sports-and-mind-games-slot": {
+          label: "Sports and Mind Games",
+          eventIds: ["basketball-half-court", "beach-volleyball", "chess-tournament", "rubiks-cube-competition", "sudoku-game-easy-level"],
+        },
+        "day2-continuation-of-competitions-slot": {
+          label: "Continuation of Competitions",
+          eventIds: ["ideathon-pitching", "it-quiz-bee", "digital-arts", "codm-tournament"],
+        },
+        "day2-major-program-slot": {
+          label: "Major Program",
+          eventIds: ["mr-and-ms-it-2026", "opening-proper-mainstage", "battle-of-the-bands", "same-day-edit", "teaser-showing", "awarding-ceremony"],
         },
       };
 
@@ -165,6 +185,19 @@
         "programming-python": "Programming Competition - Python",
         "programming-sql": "Programming Competition - SQL",
         "programming-csharp": "Programming Competition - C#",
+        invocation: "Invocation",
+        "minsu-hymn": "MinSU Hymn",
+        "opening-remarks": "Opening Remarks",
+        "competition-announcement": "Announcement of Competition",
+        "hip-hop-competition": "Hip-hop Competition",
+        "computer-aided-design-ad": "Computer Aided Design (A/D)",
+        "ideathon-pitching": "Ideathon Pitching",
+        "digital-arts": "Digital Arts",
+        "opening-proper-mainstage": "Opening Proper",
+        "live-band": "Live Band",
+        "same-day-edit": "Same Day Edit",
+        "teaser-showing": "Teaser Showing",
+        "awarding-ceremony": "Awarding",
         "mobile-legends-tournament": "Mobile Legends Tournament",
         "codm-tournament": "Call of Duty: Mobile (CODM) Tournament",
         "basketball-half-court": "Basketball (Men's Half Court)",
@@ -206,6 +239,78 @@
             '<li>Keep aisles clear and avoid movement while the program is in progress.</li>' +
             '<li>Mobile devices must be set to silent mode.</li>' +
             '<li>Follow ushers and organizers for seating and flow control.</li>' +
+            '</ul>',
+        },
+        "day1-opening-program": {
+          eventId: "day1-opening-program",
+          title: "Parade and Opening Program",
+          venue: "Auditorium and Main Campus Grounds",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Program Outline</h5>' +
+            '<ul>' +
+            '<li>Opening Ceremony / Program Proper</li>' +
+            '<li>Flag Raising</li>' +
+            '<li>Invocation</li>' +
+            '<li>MinSU Hymn</li>' +
+            '<li>Opening Remarks</li>' +
+            '<li>Announcement of Competition</li>' +
+            '<li>Hip-hop Competition</li>' +
+            '</ul>',
+        },
+        "day1-competitions-begin": {
+          eventId: "day1-competitions-begin",
+          title: "Competitions Begin",
+          venue: "Competition Venues",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Competition Blocks</h5>' +
+            '<ul>' +
+            '<li>Programming Competitions: Java, Python, C#, SQL</li>' +
+            '<li>IT Skills Competitions: Crimping, Fast Typing, Assembling and Disassembling Competition</li>' +
+            '<li>Esports Competition: Mobile Legends</li>' +
+            '</ul>',
+        },
+        "day1-sports-and-mind-games": {
+          eventId: "day1-sports-and-mind-games",
+          title: "Sports and Mind Games",
+          venue: "Sports and Game Venues",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Afternoon Program</h5>' +
+            '<ul>' +
+            '<li>Sports: Basketball, Beach Volleyball</li>' +
+            '<li>Mind Games: Chess, Rubik\'s Cube, Sudoku</li>' +
+            '</ul>',
+        },
+        "day2-continuation-of-competitions": {
+          eventId: "day2-continuation-of-competitions",
+          title: "Continuation of Competitions",
+          venue: "Competition Venues",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Morning Program</h5>' +
+            '<ul>' +
+            '<li>Ideathon Pitching</li>' +
+            '<li>IT Quiz Bee</li>' +
+            '<li>Digital Arts</li>' +
+            '<li>Esports Competition: Call of Duty Mobile</li>' +
+            '</ul>',
+        },
+        "day2-major-program": {
+          eventId: "day2-major-program",
+          title: "Major Program",
+          venue: "Main Stage",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Afternoon Program</h5>' +
+            '<ul>' +
+            '<li>Mr. and Ms. IT 2026</li>' +
+            '<li>Opening Proper</li>' +
+            '<li>Battle of the Bands</li>' +
+            '<li>Same Day Edit</li>' +
+            '<li>Teaser Showing</li>' +
+            '<li>Awarding</li>' +
             '</ul>',
         },
         "flag-raising": {
@@ -251,6 +356,175 @@
             '<li>Observe time allotments to keep the program on schedule.</li>' +
             '<li>Maintain professional conduct and respect for all speakers and segments.</li>' +
             '<li>All announcements and transitions are under organizer control.</li>' +
+            '</ul>',
+        },
+        invocation: {
+          eventId: "invocation",
+          title: "Invocation",
+          venue: "Auditorium",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Guidelines</h5>' +
+            '<ul>' +
+            '<li>Maintain silence and respect throughout the invocation.</li>' +
+            '<li>All participants and guests should remain in place during the prayer segment.</li>' +
+            '<li>Follow the host\'s cue for standing or sitting.</li>' +
+            '</ul>',
+        },
+        "minsu-hymn": {
+          eventId: "minsu-hymn",
+          title: "MinSU Hymn",
+          venue: "Auditorium",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Guidelines</h5>' +
+            '<ul>' +
+            '<li>Participants are expected to stand respectfully while the hymn is played.</li>' +
+            '<li>Sing along where appropriate and maintain proper decorum.</li>' +
+            '<li>Await organizer instructions before transitioning to the next segment.</li>' +
+            '</ul>',
+        },
+        "opening-remarks": {
+          eventId: "opening-remarks",
+          title: "Opening Remarks",
+          venue: "Auditorium",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Guidelines</h5>' +
+            '<ul>' +
+            '<li>Speakers should coordinate with program flow before stepping on stage.</li>' +
+            '<li>Audience should remain attentive and minimize movement during speeches.</li>' +
+            '<li>Time limits should be observed to keep the schedule on track.</li>' +
+            '</ul>',
+        },
+        "competition-announcement": {
+          eventId: "competition-announcement",
+          title: "Announcement of Competition",
+          venue: "Auditorium",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Guidelines</h5>' +
+            '<ul>' +
+            '<li>Organizers will announce event flow, venue assignments, and call times.</li>' +
+            '<li>Participants should confirm categories and proceed to assigned venues promptly.</li>' +
+            '<li>Clarifications may be raised only during the designated Q&amp;A window.</li>' +
+            '</ul>',
+        },
+        "hip-hop-competition": {
+          eventId: "hip-hop-competition",
+          title: "Hip-hop Competition",
+          venue: "Main Stage",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Guidelines</h5>' +
+            '<ul>' +
+            '<li>Performers must be prepared backstage before their scheduled call.</li>' +
+            '<li>Use only approved music tracks and follow stage safety rules.</li>' +
+            '<li>Judges\' decisions and organizer rulings are final.</li>' +
+            '</ul>',
+        },
+        "computer-aided-design-ad": {
+          eventId: "computer-aided-design-ad",
+          title: "Computer Aided Design (A/D)",
+          venue: "Computer Laboratory",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Guidelines</h5>' +
+            '<ul>' +
+            '<li>Participants should follow the design brief and submission format provided by organizers.</li>' +
+            '<li>Only authorized software and reference materials are allowed during the event.</li>' +
+            '<li>Outputs must be submitted within the given time allotment.</li>' +
+            '</ul>',
+        },
+        "ideathon-pitching": {
+          eventId: "ideathon-pitching",
+          title: "Ideathon Pitching",
+          venue: "Presentation Hall",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Guidelines</h5>' +
+            '<ul>' +
+            '<li>Teams must present within the allocated pitch time.</li>' +
+            '<li>Evaluation is based on innovation, feasibility, and delivery.</li>' +
+            '<li>All visual aids should be prepared before the pitch queue starts.</li>' +
+            '</ul>',
+        },
+        "digital-arts": {
+          eventId: "digital-arts",
+          title: "Digital Arts",
+          venue: "Digital Arts Room",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Guidelines</h5>' +
+            '<ul>' +
+            '<li>Participants should follow the announced theme and output requirements.</li>' +
+            '<li>Only original works created within the contest period are accepted.</li>' +
+            '<li>Submissions beyond the deadline may be disqualified.</li>' +
+            '</ul>',
+        },
+        "opening-proper-mainstage": {
+          eventId: "opening-proper-mainstage",
+          title: "Opening Proper",
+          venue: "Main Stage",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Guidelines</h5>' +
+            '<ul>' +
+            '<li>Program hosts and participants must follow the approved run sheet.</li>' +
+            '<li>Stage transitions should be coordinated with the technical team.</li>' +
+            '<li>Time management should be observed for all segments.</li>' +
+            '</ul>',
+        },
+        "live-band": {
+          eventId: "live-band",
+          title: "Live Band",
+          venue: "Main Stage",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Guidelines</h5>' +
+            '<ul>' +
+            '<li>Band setup and sound checks must follow technical crew instructions.</li>' +
+            '<li>Performances should stay within assigned set times.</li>' +
+            '<li>Stage safety and equipment handling protocols must be observed.</li>' +
+            '</ul>',
+        },
+        "same-day-edit": {
+          eventId: "same-day-edit",
+          title: "Same Day Edit",
+          venue: "Main Stage",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Guidelines</h5>' +
+            '<ul>' +
+            '<li>Production teams must submit cuts according to the announced timeline.</li>' +
+            '<li>Only event-day captured materials are permitted.</li>' +
+            '<li>Final outputs should follow the required format and duration limits.</li>' +
+            '</ul>',
+        },
+        "teaser-showing": {
+          eventId: "teaser-showing",
+          title: "Teaser Showing",
+          venue: "Main Stage",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Guidelines</h5>' +
+            '<ul>' +
+            '<li>Teasers will be shown in the sequence approved by organizers.</li>' +
+            '<li>All media files should be submitted to the technical team before screening.</li>' +
+            '<li>Runtime and content policies must be strictly followed.</li>' +
+            '</ul>',
+        },
+        "awarding-ceremony": {
+          eventId: "awarding-ceremony",
+          title: "Awarding",
+          venue: "Main Stage",
+          registrationType: "none",
+          mechanicsHtml:
+            '<h5>Guidelines</h5>' +
+            '<ul>' +
+            '<li>Awardees should proceed to the stage only when called.</li>' +
+            '<li>Program marshals will direct lineup and stage movement.</li>' +
+            '<li>Official photos and documentation follow organizer instructions.</li>' +
             '</ul>',
         },
         "it-quiz-bee": {
@@ -5176,22 +5450,6 @@
           event.preventDefault();
           showToast("Opening official CCS Facebook page.");
           window.open("https://www.facebook.com/mindorostateuccs", "_blank", "noopener,noreferrer");
-        });
-      }
-
-      const officialWebsiteButton = document.getElementById("official-website-button");
-      if (officialWebsiteButton) {
-        officialWebsiteButton.addEventListener("click", (event) => {
-          event.preventDefault();
-          showToast("Official website details will be posted here soon.");
-        });
-      }
-
-      const contactOfficeButton = document.getElementById("contact-office-button");
-      if (contactOfficeButton) {
-        contactOfficeButton.addEventListener("click", (event) => {
-          event.preventDefault();
-          showToast("Contact office information will be announced on the official CCS page.");
         });
       }
 
